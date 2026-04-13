@@ -16,10 +16,21 @@ USER_IDENTITY = "Freddy_Legal_Project_2026"
 
 # OpenRouter Configuration
 def get_secret(key):
-    val = st.secrets[key]
-    if isinstance(val, dict):
-        return val.get(key, val)
-    return val
+    try:
+        val = st.secrets[key]
+        # If it's dict-like
+        if hasattr(val, "get"):
+            v = val.get(key, val)
+            if isinstance(v, str): return v
+        # If it's a string that looks like a dict
+        if isinstance(val, str) and val.strip().startswith("{"):
+            import ast
+            parsed = ast.literal_eval(val.strip())
+            if hasattr(parsed, "get"):
+                return parsed.get(key, val)
+        return val
+    except Exception:
+        return ""
 
 OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
 OPENROUTER_MODEL_A = "openai/gpt-oss-120b"
