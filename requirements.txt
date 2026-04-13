@@ -4,6 +4,7 @@ streamlit
 # AI & LLM (Google Vertex AI for Claude and Embeddings)
 google-cloud-aiplatform
 anthropic[vertex]
+huggingface_hub
 
 # Vector Database (Zilliz Cloud / Milvus)
 pymilvus

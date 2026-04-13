@@ -5,6 +5,7 @@ import re
 import requests
 import concurrent.futures
 from google import genai
+from huggingface_hub import InferenceClient
 from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
 
@@ -43,7 +44,7 @@ GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
 
 # Hugging Face Configuration
 HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
-HF_MODEL = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+HF_MODEL = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:novita"
 
 # --- 2. LOGIN GATE ---
 def check_password():
@@ -240,31 +241,22 @@ def call_openrouter_b(prompt_text):
         return f"Error calling LLM B: {e}"
 
 def call_huggingface_llm(prompt_text):
-    """Call Hugging Face LLM."""
+    """Call Hugging Face LLM using InferenceClient."""
     if not HUGGINGFACE_API_KEY:
         return "Error: Hugging Face API Key not configured."
     
-    url = f"https://router.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
-    
-    headers = {
-        "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": HF_MODEL,
-        "messages": [
-            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
-            {"role": "user", "content": prompt_text}
-        ],
-        "max_tokens": 1000
-    }
-    
     try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+        client = InferenceClient(api_key=HUGGINGFACE_API_KEY)
+        
+        completion = client.chat.completions.create(
+            model=HF_MODEL,
+            messages=[
+                {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
+                {"role": "user", "content": prompt_text}
+            ],
+            max_tokens=1000
+        )
+        return completion.choices[0].message.content
     except Exception as e:
         return f"Error calling Hugging Face: {e}"
 
