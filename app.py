@@ -323,18 +323,38 @@ st.title("🤖 Multi-LLM Ensemble System")
 if "messages" not in st.session_state:
     raw_history = load_history(USER_IDENTITY)
     st.session_state.messages = []
-    temp_data = {}
+    current_interaction = None
     for item in raw_history:
-        if item['role'] == 'user':
-            temp_data = {"user": item['text'], "u_id": item['id']}
-        elif item['role'] == 'assistant' and "user" in temp_data:
-            st.session_state.messages.append({
-                "user": temp_data["user"], 
-                "assistant": item['text'],
-                "u_id": temp_data["u_id"],
-                "a_id": item['id']
-            })
-            temp_data = {}
+        role = item['role']
+        if role in ['user', 'user_prompt']:
+            if current_interaction is not None:
+                st.session_state.messages.append(current_interaction)
+            current_interaction = {
+                "user": item['text'],
+                "u_id": item['id'],
+                "output1": "", "o1_id": None,
+                "output2": "", "o2_id": None,
+                "output3": "", "o3_id": None,
+                "master": "", "m_id": None,
+                "all_ids": [item['id']]
+            }
+        elif current_interaction is not None:
+            current_interaction["all_ids"].append(item['id'])
+            if role == 'output1_user_prompt':
+                current_interaction["output1"] = item['text']
+                current_interaction["o1_id"] = item['id']
+            elif role == 'output2_llm_a':
+                current_interaction["output2"] = item['text']
+                current_interaction["o2_id"] = item['id']
+            elif role == 'output3_llm_b':
+                current_interaction["output3"] = item['text']
+                current_interaction["o3_id"] = item['id']
+            elif role in ['assistant', 'master_output']:
+                current_interaction["master"] = item['text']
+                current_interaction["m_id"] = item['id']
+                
+    if current_interaction is not None:
+        st.session_state.messages.append(current_interaction)
 
 # --- 8. DISPLAY HISTORY ---
 st.subheader("Consultation History")
@@ -342,12 +362,29 @@ for i, entry in enumerate(st.session_state.messages):
     with st.expander(f"📂 Interaction {i+1}: {entry['user'][:50]}...", expanded=False):
         st.markdown("**👤 Your Query:**")
         st.write(entry['user'])
-        st.markdown("---")
-        st.markdown("**💡 Advisor Strategy:**")
-        st.markdown(clean_text(entry['assistant']))
+        
+        if entry.get('output1'):
+            st.markdown("---")
+            st.markdown("**📝 Output 1: Optimized User Prompt:**")
+            st.markdown(clean_text(entry['output1']))
+            
+        if entry.get('output2'):
+            st.markdown("---")
+            st.markdown("**🤖 Output 2: LLM A (GPT-OSS-120B):**")
+            st.markdown(clean_text(entry['output2']))
+            
+        if entry.get('output3'):
+            st.markdown("---")
+            st.markdown("**⚡ Output 3: LLM B (Nemotron-3-Super-120B):**")
+            st.markdown(clean_text(entry['output3']))
+            
+        if entry.get('master'):
+            st.markdown("---")
+            st.markdown("**🏆 Master Output: Synthesis:**")
+            st.markdown(clean_text(entry['master']))
         
         if st.button(f"🗑️ Delete Interaction {i+1}", key=f"del_{i}"):
-            delete_interaction([entry["u_id"], entry["a_id"]], i)
+            delete_interaction(entry["all_ids"], i)
 
 # --- 9. CHAT ENGINE (MULTI-LLM PIPELINE) ---
 client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
@@ -428,11 +465,29 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 
                 # Update local state
                 p_keys = res.primary_keys
+                
+                idx = 1
+                o1_id = o2_id = o3_id = m_id = None
+                if output1_emb:
+                    o1_id = p_keys[idx]
+                    idx += 1
+                if output2_emb:
+                    o2_id = p_keys[idx]
+                    idx += 1
+                if output3_emb:
+                    o3_id = p_keys[idx]
+                    idx += 1
+                if master_emb:
+                    m_id = p_keys[idx]
+                    
                 st.session_state.messages.append({
                     "user": prompt, 
-                    "assistant": master_output,
-                    "u_id": p_keys[0], 
-                    "a_id": p_keys[-1] if len(p_keys) > 1 else p_keys[0]
+                    "u_id": p_keys[0],
+                    "output1": output1, "o1_id": o1_id,
+                    "output2": output2, "o2_id": o2_id,
+                    "output3": output3, "o3_id": o3_id,
+                    "master": master_output, "m_id": m_id,
+                    "all_ids": p_keys
                 })
                 
                 status.update(label="Analysis Complete", state="complete", expanded=False)
