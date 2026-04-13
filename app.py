@@ -267,7 +267,7 @@ def call_huggingface_llm(prompt_text):
     except Exception as e:
         return f"Error calling Hugging Face: {e}"
 
-def call_gemini_flash_synthesize(output1, output2, output3, output4):
+def call_gemini_flash_synthesize(output1, output2, outputA, output4):
     """Call Gemini 3 Flash to synthesize outputs into master output."""
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
@@ -283,7 +283,7 @@ Response A (LLM A - GPT-OSS):
 {output2}
 
 Response B (LLM B - Nemotron):
-{output3}
+{outputA}
 
 Response C (LLM C - Llama-4-Maverick):
 {output4}
@@ -332,7 +332,7 @@ if "messages" not in st.session_state:
                 "u_id": item['id'],
                 "output1": "", "o1_id": None,
                 "output2": "", "o2_id": None,
-                "output3": "", "o3_id": None,
+                "outputA": "", "oA_id": None,
                 "output4": "", "o4_id": None,
                 "master": "", "m_id": None,
                 "all_ids": [item['id']]
@@ -345,9 +345,9 @@ if "messages" not in st.session_state:
             elif role == 'output2_llm_a':
                 current_interaction["output2"] = item['text']
                 current_interaction["o2_id"] = item['id']
-            elif role == 'output3_llm_b':
-                current_interaction["output3"] = item['text']
-                current_interaction["o3_id"] = item['id']
+            elif role == 'outputA_llm_b':
+                current_interaction["outputA"] = item['text']
+                current_interaction["oA_id"] = item['id']
             elif role == 'output4_llm_c':
                 current_interaction["output4"] = item['text']
                 current_interaction["o4_id"] = item['id']
@@ -375,10 +375,10 @@ for i, entry in enumerate(st.session_state.messages):
             st.markdown("**🤖 Output 2: LLM A (GPT-OSS-120B):**")
             st.markdown(clean_text(entry['output2']))
             
-        if entry.get('output3'):
+        if entry.get('outputA'):
             st.markdown("---")
-            st.markdown("**⚡ Output 3: LLM B (Nemotron-3-Super-120B):**")
-            st.markdown(clean_text(entry['output3']))
+            st.markdown("**⚡ Output A: LLM B (Nemotron-3-Super-120B):**")
+            st.markdown(clean_text(entry['outputA']))
             
         if entry.get('output4'):
             st.markdown("---")
@@ -414,7 +414,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 
                 # STEP 4: GENERATE OUTPUT 3 using LLM B (OpenRouter)
                 status.update(label="Generating strategy with LLM B (Nemotron-3-Super-120B)...", state="running")
-                output3 = call_openrouter_b(output1)
+                outputA = call_openrouter_b(output1)
                 
                 # STEP 4.5: GENERATE OUTPUT 4 using LLM C (Hugging Face)
                 status.update(label="Generating strategy with LLM C (Llama-4-Maverick-17B)...", state="running")
@@ -422,7 +422,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 
                 # STEP 5: SYNTHESIZE using Gemini 3 Flash
                 status.update(label="Synthesizing master output with Gemini 3 Flash...", state="running")
-                master_output = call_gemini_flash_synthesize(output1, output2, output3, output4)
+                master_output = call_gemini_flash_synthesize(output1, output2, outputA, output4)
                 
                 # STEP 6: ARCHIVE ALL OUTPUTS TO ZILLIZ
                 status.update(label="Archiving to Zilliz...", state="running")
@@ -431,7 +431,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 safe_prompt = prompt[:59000]
                 safe_output1 = output1[:59000] if output1 else ""
                 safe_output2 = output2[:59000] if output2 else ""
-                safe_output3 = output3[:59000] if output3 else ""
+                safe_outputA = outputA[:59000] if outputA else ""
                 safe_output4 = output4[:59000] if output4 else ""
                 safe_master = master_output[:59000] if master_output else ""
                 
@@ -440,14 +440,14 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     prompt_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_prompt).embeddings[0].values
                     output1_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output1).embeddings[0].values if safe_output1 else None
                     output2_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output2).embeddings[0].values if safe_output2 else None
-                    output3_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output3).embeddings[0].values if safe_output3 else None
+                    outputA_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_outputA).embeddings[0].values if safe_outputA else None
                     output4_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output4).embeddings[0].values if safe_output4 else None
                     master_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_master).embeddings[0].values if safe_master else None
                 except:
                     prompt_emb = [0.0] * 768
                     output1_emb = [0.0] * 768 if safe_output1 else None
                     output2_emb = [0.0] * 768 if safe_output2 else None
-                    output3_emb = [0.0] * 768 if safe_output3 else None
+                    outputA_emb = [0.0] * 768 if safe_outputA else None
                     output4_emb = [0.0] * 768 if safe_output4 else None
                     master_emb = [0.0] * 768 if safe_master else None
                 
@@ -463,11 +463,11 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     insert_data[1].append(safe_output2)
                     insert_data[2].append(USER_IDENTITY)
                     insert_data[3].append("output2_llm_a")
-                if output3_emb:
-                    insert_data[0].append(output3_emb)
-                    insert_data[1].append(safe_output3)
+                if outputA_emb:
+                    insert_data[0].append(outputA_emb)
+                    insert_data[1].append(safe_outputA)
                     insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("output3_llm_b")
+                    insert_data[3].append("outputA_llm_b")
                 if output4_emb:
                     insert_data[0].append(output4_emb)
                     insert_data[1].append(safe_output4)
@@ -486,15 +486,15 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 p_keys = res.primary_keys
                 
                 idx = 1
-                o1_id = o2_id = o3_id = o4_id = m_id = None
+                o1_id = o2_id = oA_id = o4_id = m_id = None
                 if output1_emb:
                     o1_id = p_keys[idx]
                     idx += 1
                 if output2_emb:
                     o2_id = p_keys[idx]
                     idx += 1
-                if output3_emb:
-                    o3_id = p_keys[idx]
+                if outputA_emb:
+                    oA_id = p_keys[idx]
                     idx += 1
                 if output4_emb:
                     o4_id = p_keys[idx]
@@ -507,7 +507,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     "u_id": p_keys[0],
                     "output1": output1, "o1_id": o1_id,
                     "output2": output2, "o2_id": o2_id,
-                    "output3": output3, "o3_id": o3_id,
+                    "outputA": outputA, "oA_id": oA_id,
                     "output4": output4, "o4_id": o4_id,
                     "master": master_output, "m_id": m_id,
                     "all_ids": p_keys
@@ -531,8 +531,8 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 col3, col4 = st.columns(2)
                 
                 with col3:
-                    with st.expander("⚡ Output 3: LLM B (Nemotron-3-Super-120B)", expanded=True):
-                        st.markdown(clean_text(output3))
+                    with st.expander("⚡ Output A: LLM B (Nemotron-3-Super-120B)", expanded=True):
+                        st.markdown(clean_text(outputA))
                 
                 with col4:
                     with st.expander("🚀 Output 4: LLM C (Llama-4-Maverick-17B)", expanded=True):
