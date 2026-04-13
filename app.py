@@ -64,16 +64,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 3. GCP AUTH FIX ---
-if "gcp_service_account" in st.secrets:
-    with open("gcp_key.json", "w") as f:
-        json.dump(dict(st.secrets["gcp_service_account"]), f)
-    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "gcp_key.json"
-else:
-    st.error("GCP Service Account credentials missing in secrets!")
-    st.stop()
-
-# --- 4. ZILLIZ & UTILS ---
+# --- 3. ZILLIZ & UTILS ---
 @st.cache_resource
 def init_zilliz():
     connections.connect(uri=st.secrets["ZILLIZ_URI"], token=st.secrets["ZILLIZ_TOKEN"])
