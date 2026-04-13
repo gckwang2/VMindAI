@@ -243,7 +243,7 @@ def call_huggingface_llm(prompt_text):
     if not HUGGINGFACE_API_KEY:
         return "Error: Hugging Face API Key not configured."
     
-    url = f"https://api-inference.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
+    url = f"https://router.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
