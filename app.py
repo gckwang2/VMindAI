@@ -15,12 +15,14 @@ EMBED_MODEL = "text-embedding-004"
 USER_IDENTITY = "Freddy_Legal_Project_2026"
 
 # OpenRouter Configuration
-OPENROUTER_API_KEY = st.secrets["OPENROUTER_API_KEY"]
+raw_openrouter_key = st.secrets["OPENROUTER_API_KEY"]
+OPENROUTER_API_KEY = raw_openrouter_key["OPENROUTER_API_KEY"] if isinstance(raw_openrouter_key, dict) else raw_openrouter_key
 OPENROUTER_MODEL_A = "openai/gpt-oss-120b"
 OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 
 # Google AI Studio Configuration
-GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+raw_google_key = st.secrets["GOOGLE_API_KEY"]
+GOOGLE_API_KEY = raw_google_key["GOOGLE_API_KEY"] if isinstance(raw_google_key, dict) else raw_google_key
 GEMMA_MODEL = "gemma-4-31b"
 GEMINI_FLASH_MODEL = "gemini-3.0-flash-exp"
 
