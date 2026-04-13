@@ -12,7 +12,7 @@ PROJECT_ID = st.secrets["PROJECT_ID"]
 LOCATION = "global"
 GEMINI_MODEL = "gemini-3.1-pro-preview"
 EMBED_MODEL = "text-embedding-004"
-USER_IDENTITY = "Freddy_Legal_Project_2026"
+USER_IDENTITY = "Generic_Ensemble_User"
 
 # OpenRouter Configuration
 def get_secret(key):
@@ -108,7 +108,7 @@ else:
 @st.cache_resource
 def init_zilliz():
     connections.connect(uri=st.secrets["ZILLIZ_URI"], token=st.secrets["ZILLIZ_TOKEN"])
-    col_name = "legal_memory_v2"
+    col_name = "ensemble_memory_v1"
     if not utility.has_collection(col_name):
         fields = [
             FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
@@ -127,7 +127,7 @@ def init_zilliz():
 
 collection = init_zilliz()
 
-def clean_legal_text(text):
+def clean_text(text):
     if not text: return ""
     text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
     return text.replace("add−back", "add-back").replace("S$", "S$ ").replace("\n", "\n\n")
@@ -145,7 +145,7 @@ def delete_interaction(ids_to_delete, index_in_state):
         collection.delete(delete_expr)
         collection.flush()
         st.session_state.messages.pop(index_in_state)
-        st.success("Interaction purged from legal memory.")
+        st.success("Interaction purged from memory.")
         st.rerun()
     except Exception as e:
         st.error(f"Deletion failed: {e}")
@@ -192,10 +192,10 @@ def call_gemma4_31b(prompt_text):
             "parts": [{
                 "text": f"""You are a prompt engineer. Your task is to:
 1. Analyze the user's raw entry
-2. Retrieve relevant legal context from the knowledge base
+2. Retrieve relevant context from the knowledge base
 3. Synthesize a comprehensive, well-structured prompt (Output1) that includes:
    - User's core question/request
-   - Relevant legal facts and context
+   - Relevant facts and context
    - Clear instructions for the LLMs
 
 User Entry: {prompt_text}
@@ -225,7 +225,7 @@ def call_openrouter_a(prompt_text):
     payload = {
         "model": OPENROUTER_MODEL_A,
         "messages": [
-            {"role": "system", "content": "You are a Senior Legal Strategist. Provide comprehensive legal analysis and strategy based on the prompt provided."},
+            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
             {"role": "user", "content": prompt_text}
         ]
     }
@@ -234,7 +234,7 @@ def call_openrouter_a(prompt_text):
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://vmindai.streamlit.app",
-        "X-Title": "VMindAI Legal Strategist"
+        "X-Title": "VMindAI Ensemble System"
     }
     
     try:
@@ -255,7 +255,7 @@ def call_openrouter_b(prompt_text):
     payload = {
         "model": OPENROUTER_MODEL_B,
         "messages": [
-            {"role": "system", "content": "You are a Senior Legal Strategist. Provide comprehensive legal analysis and strategy based on the prompt provided."},
+            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
             {"role": "user", "content": prompt_text}
         ]
     }
@@ -264,7 +264,7 @@ def call_openrouter_b(prompt_text):
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "https://vmindai.streamlit.app",
-        "X-Title": "VMindAI Legal Strategist"
+        "X-Title": "VMindAI Ensemble System"
     }
     
     try:
@@ -282,7 +282,7 @@ def call_gemini_flash_synthesize(output1, output2, output3):
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_FLASH_MODEL}:generateContent?key={GOOGLE_API_KEY}"
     
-    prompt_text = f"""You are a Senior Legal Editor. Your task is to synthesize three legal outputs into one master output.
+    prompt_text = f"""You are an Expert Editor. Your task is to synthesize three outputs into one master output.
 
 Output 1 (User Prompt & Context): {output1}
 
@@ -293,8 +293,8 @@ Output 3 (LLM B - Nemotron): {output3}
 Synthesize these outputs into a cohesive, comprehensive master output that:
 1. Integrates the strongest insights from all three outputs
 2. Resolves any contradictions
-3. Provides a unified, authoritative legal strategy
-4. Maintains professional legal tone
+3. Provides a unified, authoritative response
+4. Maintains a professional tone
 
 Return ONLY the master output, nothing else."""
     
@@ -317,8 +317,8 @@ Return ONLY the master output, nothing else."""
         return f"Error calling Gemini Flash: {e}"
 
 # --- 7. UI SETUP ---
-st.set_page_config(page_title="Legal Strategist", layout="wide")
-st.title("⚖️ Principal Legal Advisor")
+st.set_page_config(page_title="Ensemble AI System", layout="wide")
+st.title("🤖 Multi-LLM Ensemble System")
 
 if "messages" not in st.session_state:
     raw_history = load_history(USER_IDENTITY)
@@ -343,8 +343,8 @@ for i, entry in enumerate(st.session_state.messages):
         st.markdown("**👤 Your Query:**")
         st.write(entry['user'])
         st.markdown("---")
-        st.markdown("**⚖️ Advisor Strategy:**")
-        st.markdown(clean_legal_text(entry['assistant']))
+        st.markdown("**💡 Advisor Strategy:**")
+        st.markdown(clean_text(entry['assistant']))
         
         if st.button(f"🗑️ Delete Interaction {i+1}", key=f"del_{i}"):
             delete_interaction([entry["u_id"], entry["a_id"]], i)
@@ -352,13 +352,13 @@ for i, entry in enumerate(st.session_state.messages):
 # --- 9. CHAT ENGINE (MULTI-LLM PIPELINE) ---
 client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
 
-if prompt := st.chat_input("Enter your legal query or draft..."):
+if prompt := st.chat_input("Enter your query or draft..."):
     with st.chat_message("assistant"):
-        with st.status("Processing Legal Query...", expanded=True) as status:
+        with st.status("Processing Query...", expanded=True) as status:
             try:
                 # STEP 1: RETRIEVE CONTEXT
                 past_context = retrieve_relevant_context(prompt)
-                status.update(label="Retrieving legal memory...", state="running")
+                status.update(label="Retrieving memory...", state="running")
                 
                 # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using Gemma 4 31B
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
@@ -435,7 +435,7 @@ if prompt := st.chat_input("Enter your legal query or draft..."):
                     "a_id": p_keys[-1] if len(p_keys) > 1 else p_keys[0]
                 })
                 
-                status.update(label="Legal Analysis Complete", state="complete", expanded=False)
+                status.update(label="Analysis Complete", state="complete", expanded=False)
                 
                 # Display outputs
                 st.subheader("📊 Multi-LLM Pipeline Output")
@@ -444,21 +444,21 @@ if prompt := st.chat_input("Enter your legal query or draft..."):
                 
                 with col1:
                     with st.expander("📝 Output 1: Optimized User Prompt", expanded=True):
-                        st.markdown(clean_legal_text(output1))
+                        st.markdown(clean_text(output1))
                 
                 with col2:
                     with st.expander("🤖 Output 2: LLM A (GPT-OSS-120B)", expanded=True):
-                        st.markdown(clean_legal_text(output2))
+                        st.markdown(clean_text(output2))
                 
                 col3, col4 = st.columns(2)
                 
                 with col3:
                     with st.expander("⚡ Output 3: LLM B (Nemotron-3-Super-120B)", expanded=True):
-                        st.markdown(clean_legal_text(output3))
+                        st.markdown(clean_text(output3))
                 
                 with col4:
                     with st.expander("🏆 Master Output: Gemini 3 Flash Synthesis", expanded=True):
-                        st.markdown(clean_legal_text(master_output))
+                        st.markdown(clean_text(master_output))
                 
                 st.rerun()
                 
