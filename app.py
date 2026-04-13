@@ -6,7 +6,6 @@ import requests
 import concurrent.futures
 import time
 from google import genai
-from huggingface_hub import InferenceClient
 from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
 
@@ -43,9 +42,9 @@ OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
 
-# Hugging Face Configuration
-HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
-HF_MODEL = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:novita"
+# Groq Configuration
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
+GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # --- 2. LOGIN GATE ---
 def check_password():
@@ -241,25 +240,34 @@ def call_openrouter_b(prompt_text):
     except Exception as e:
         return f"Error calling LLM B: {e}"
 
-def call_huggingface_llm(prompt_text):
-    """Call Hugging Face LLM using InferenceClient."""
-    if not HUGGINGFACE_API_KEY:
-        return "Error: Hugging Face API Key not configured."
+def call_groq_llm(prompt_text):
+    """Call Groq LLM."""
+    if not GROQ_API_KEY:
+        return "Error: Groq API Key not configured."
+    
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
+            {"role": "user", "content": prompt_text}
+        ],
+        "max_tokens": 1000
+    }
     
     try:
-        client = InferenceClient(api_key=HUGGINGFACE_API_KEY)
-        
-        completion = client.chat.completions.create(
-            model=HF_MODEL,
-            messages=[
-                {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
-                {"role": "user", "content": prompt_text}
-            ],
-            max_tokens=1000
-        )
-        return completion.choices[0].message.content
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
     except Exception as e:
-        return f"Error calling Hugging Face: {e}"
+        return f"Error calling Groq: {e}"
 
 def call_gemini_flash_synthesize(output1, output2, outputA, output4):
     """Call Gemini 3 Flash to synthesize outputs into master output."""
@@ -279,7 +287,7 @@ Response A (LLM A - GPT-OSS):
 Response B (LLM B - Nemotron):
 {outputA}
 
-Response C (LLM C - Llama-4-Maverick):
+Response C (LLM C - Llama-4-Scout):
 {output4}
 
 Synthesize Response A, Response B, and Response C into a cohesive, comprehensive master output that:
@@ -376,7 +384,7 @@ for i, entry in enumerate(st.session_state.messages):
             
         if entry.get('output4'):
             st.markdown("---")
-            st.markdown("**🚀 Output 4: LLM C (Llama-4-Maverick-17B):**")
+            st.markdown("**🚀 Output 4: LLM C (Llama-4-Scout-17B):**")
             st.markdown(clean_text(entry['output4']))
             
         if entry.get('master'):
@@ -416,7 +424,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                     future_a = executor.submit(timed_call, call_openrouter_a, raw_output1)
                     future_b = executor.submit(timed_call, call_openrouter_b, raw_output1)
-                    future_c = executor.submit(timed_call, call_huggingface_llm, raw_output1)
+                    future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
                     
                     raw_output2, t2 = future_a.result()
                     raw_outputA, tA = future_b.result()
@@ -545,7 +553,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                         st.markdown(clean_text(outputA))
                 
                 with col4:
-                    with st.expander("🚀 Output 4: LLM C (Llama-4-Maverick-17B)", expanded=True):
+                    with st.expander("🚀 Output 4: LLM C (Llama-4-Scout-17B)", expanded=True):
                         st.markdown(clean_text(output4))
                         
                 st.markdown("---")
