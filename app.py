@@ -24,7 +24,7 @@ OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 raw_google_key = st.secrets["GOOGLE_API_KEY"]
 GOOGLE_API_KEY = raw_google_key["GOOGLE_API_KEY"] if isinstance(raw_google_key, dict) else raw_google_key
 GEMMA_MODEL = "gemma-4-31b"
-GEMINI_FLASH_MODEL = "gemini-3.0-flash-exp"
+GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
 
 # --- 2. LOGIN GATE ---
 def check_password():
@@ -234,7 +234,7 @@ def call_gemini_flash_synthesize(output1, output2, output3):
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash-exp:generateContent?key={GOOGLE_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_FLASH_MODEL}:generateContent?key={GOOGLE_API_KEY}"
     
     prompt_text = f"""You are a Senior Legal Editor. Your task is to synthesize three legal outputs into one master output.
 
