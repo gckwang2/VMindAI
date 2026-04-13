@@ -5,6 +5,7 @@ import re
 import requests
 import concurrent.futures
 import time
+import datetime
 from google import genai
 from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
@@ -152,6 +153,7 @@ def call_gemini_prompt_creator(prompt_text):
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_FLASH_MODEL}:generateContent?key={GOOGLE_API_KEY}"
     
+    current_date = datetime.date.today().strftime("%Y-%m-%d")
     payload = {
         "contents": [{
             "parts": [{
@@ -162,6 +164,9 @@ def call_gemini_prompt_creator(prompt_text):
    - User's core question/request
    - Relevant facts and context
    - Clear instructions for the LLMs
+
+Current Date: {current_date}
+IMPORTANT: Do not limit your responses or the generated prompt to the years 2023-2024. Acknowledge the current date and ensure the prompt is relevant to the present and future.
 
 User Entry: {prompt_text}
 
