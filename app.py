@@ -4,6 +4,7 @@ import os
 import re
 import requests
 import concurrent.futures
+import time
 from google import genai
 from huggingface_hub import InferenceClient
 from google.genai import types
@@ -399,23 +400,39 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 
                 # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using Gemini Prompt Creator
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
-                output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
+                t0 = time.time()
+                raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
+                t1 = time.time() - t0
                 
                 # STEP 3: GENERATE OUTPUTS 2, 3, and 4 concurrently
                 status.update(label="Generating strategies with LLMs concurrently...", state="running")
                 
+                def timed_call(func, arg):
+                    start_t = time.time()
+                    res = func(arg)
+                    dur = time.time() - start_t
+                    return res, dur
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-                    future_a = executor.submit(call_openrouter_a, output1)
-                    future_b = executor.submit(call_openrouter_b, output1)
-                    future_c = executor.submit(call_huggingface_llm, output1)
+                    future_a = executor.submit(timed_call, call_openrouter_a, raw_output1)
+                    future_b = executor.submit(timed_call, call_openrouter_b, raw_output1)
+                    future_c = executor.submit(timed_call, call_huggingface_llm, raw_output1)
                     
-                    output2 = future_a.result()
-                    outputA = future_b.result()
-                    output4 = future_c.result()
+                    raw_output2, t2 = future_a.result()
+                    raw_outputA, tA = future_b.result()
+                    raw_output4, t4 = future_c.result()
                 
                 # STEP 5: SYNTHESIZE using Gemini 3 Flash
                 status.update(label="Synthesizing master output with Gemini 3 Flash...", state="running")
-                master_output = call_gemini_flash_synthesize(output1, output2, outputA, output4)
+                t0 = time.time()
+                raw_master_output = call_gemini_flash_synthesize(raw_output1, raw_output2, raw_outputA, raw_output4)
+                t_master = time.time() - t0
+                
+                output1 = f"{raw_output1}\n\n*(⏱️ Time taken: {t1:.2f}s)*"
+                output2 = f"{raw_output2}\n\n*(⏱️ Time taken: {t2:.2f}s)*"
+                outputA = f"{raw_outputA}\n\n*(⏱️ Time taken: {tA:.2f}s)*"
+                output4 = f"{raw_output4}\n\n*(⏱️ Time taken: {t4:.2f}s)*"
+                master_output = f"{raw_master_output}\n\n*(⏱️ Time taken: {t_master:.2f}s)*"
                 
                 # STEP 6: ARCHIVE ALL OUTPUTS TO ZILLIZ
                 status.update(label="Archiving to Zilliz...", state="running")
