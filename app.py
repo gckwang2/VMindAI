@@ -3,6 +3,7 @@ import json
 import os
 import re
 import requests
+import concurrent.futures
 from google import genai
 from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
@@ -408,17 +409,17 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
                 output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 
-                # STEP 3: GENERATE OUTPUT 2 using LLM A (OpenRouter)
-                status.update(label="Generating strategy with LLM A (GPT-OSS-120B)...", state="running")
-                output2 = call_openrouter_a(output1)
+                # STEP 3: GENERATE OUTPUTS 2, 3, and 4 concurrently
+                status.update(label="Generating strategies with LLMs concurrently...", state="running")
                 
-                # STEP 4: GENERATE OUTPUT 3 using LLM B (OpenRouter)
-                status.update(label="Generating strategy with LLM B (Nemotron-3-Super-120B)...", state="running")
-                outputA = call_openrouter_b(output1)
-                
-                # STEP 4.5: GENERATE OUTPUT 4 using LLM C (Hugging Face)
-                status.update(label="Generating strategy with LLM C (Llama-4-Maverick-17B)...", state="running")
-                output4 = call_huggingface_llm(output1)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                    future_a = executor.submit(call_openrouter_a, output1)
+                    future_b = executor.submit(call_openrouter_b, output1)
+                    future_c = executor.submit(call_huggingface_llm, output1)
+                    
+                    output2 = future_a.result()
+                    outputA = future_b.result()
+                    output4 = future_c.result()
                 
                 # STEP 5: SYNTHESIZE using Gemini 3 Flash
                 status.update(label="Synthesizing master output with Gemini 3 Flash...", state="running")
