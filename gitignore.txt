@@ -1,0 +1,11 @@
+# Local Streamlit secrets
+.streamlit/secrets.toml
+
+# Google Cloud Service Account keys
+*.json
+gcp_key.json
+
+# Python environment/cache
+__pycache__/
+venv/
+.env

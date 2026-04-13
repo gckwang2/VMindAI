@@ -1,0 +1,16 @@
+# Web Interface
+streamlit
+
+# AI & LLM (Google Vertex AI for Claude and Embeddings)
+google-cloud-aiplatform
+anthropic[vertex]
+
+# Vector Database (Zilliz Cloud / Milvus)
+pymilvus
+
+# Utilities
+protobuf
+uuid
+
+google-cloud-aiplatform>=1.70.0
+google-genai>=0.3.0
