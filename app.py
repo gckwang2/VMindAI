@@ -41,6 +41,37 @@ GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 GEMMA_MODEL = "gemma-4-31b"
 GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
 
+# --- 1.5. API KEY VALIDATION ---
+def test_api_keys():
+    errors = []
+    if not OPENROUTER_API_KEY:
+        errors.append("OpenRouter API key is missing.")
+    else:
+        try:
+            res = requests.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"})
+            if res.status_code != 200:
+                errors.append(f"OpenRouter API Key invalid ({res.status_code}): {res.text}")
+        except Exception as e:
+            errors.append(f"OpenRouter connection failed: {e}")
+            
+    if not GOOGLE_API_KEY:
+        errors.append("Google API key is missing.")
+    else:
+        try:
+            res = requests.get(f"https://generativelanguage.googleapis.com/v1beta/models?key={GOOGLE_API_KEY}")
+            if res.status_code != 200:
+                errors.append(f"Google API Key invalid ({res.status_code}): {res.text}")
+        except Exception as e:
+            errors.append(f"Google API connection failed: {e}")
+            
+    return errors
+
+api_errors = test_api_keys()
+if api_errors:
+    for err in api_errors:
+        st.error(f"🚨 API Key Error: {err}")
+    st.stop()
+
 # --- 2. LOGIN GATE ---
 def check_password():
     if "passwords" not in st.secrets:
