@@ -2,21 +2,29 @@ import streamlit as st
 import json
 import os
 import re
+import requests
 from google import genai
 from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
 
-# --- 1. GLOBAL PROMPT (Removed) ---
-LEGAL_PROMPT = ""
-
-# --- 2. CONFIG & IDENTITY ---
+# --- 1. CONFIG & IDENTITY ---
 PROJECT_ID = st.secrets["PROJECT_ID"]
-LOCATION = "global" 
-MODEL_ID = "gemini-3.1-pro-preview"
+LOCATION = "global"
+GEMINI_MODEL = "gemini-3.1-pro-preview"
 EMBED_MODEL = "text-embedding-004"
 USER_IDENTITY = "Freddy_Legal_Project_2026"
 
-# --- 3. LOGIN GATE ---
+# OpenRouter Configuration
+OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL_A = "openai/gpt-oss-120b"
+OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
+
+# Google AI Studio Configuration
+GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY", "")
+GEMMA_MODEL = "gemma-4-31b"
+GEMINI_FLASH_MODEL = "gemini-3.0-flash-exp"
+
+# --- 2. LOGIN GATE ---
 def check_password():
     if "passwords" not in st.secrets:
         st.error("🚨 Configuration Error: '[passwords]' section missing in Secrets.")
@@ -39,7 +47,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 4. GCP AUTH FIX ---
+# --- 3. GCP AUTH FIX ---
 if "gcp_service_account" in st.secrets:
     with open("gcp_key.json", "w") as f:
         json.dump(dict(st.secrets["gcp_service_account"]), f)
@@ -48,7 +56,7 @@ else:
     st.error("GCP Service Account credentials missing in secrets!")
     st.stop()
 
-# --- 5. ZILLIZ & UTILS ---
+# --- 4. ZILLIZ & UTILS ---
 @st.cache_resource
 def init_zilliz():
     connections.connect(uri=st.secrets["ZILLIZ_URI"], token=st.secrets["ZILLIZ_TOKEN"])
@@ -94,10 +102,9 @@ def delete_interaction(ids_to_delete, index_in_state):
     except Exception as e:
         st.error(f"Deletion failed: {e}")
 
-# --- 6. RAG RETRIEVAL ENGINE ---
+# --- 5. RAG RETRIEVAL ENGINE ---
 def retrieve_relevant_context(query_text, top_k=3):
     """Semantic search to pull relevant facts from Zilliz."""
-    # If the collection is empty, return no context immediately.
     if collection.num_entities == 0:
         return ""
         
@@ -114,14 +121,152 @@ def retrieve_relevant_context(query_text, top_k=3):
             param=search_params, 
             limit=top_k, 
             output_fields=["text"],
-            expr=f'session_id == "{USER_IDENTITY}"' # Ensure we only pull the user's data
+            expr=f'session_id == "{USER_IDENTITY}"'
         )
         
         context_snippets = [hit.entity.get("text") for hit in results[0]]
-        return "\n\n---\n\n".join(context_snippets) if context_snippets else "No relevant past context found."
+        return "\n\n---\n\n".join(context_snippets) if context_snippets else ""
     except Exception as e:
         st.warning(f"Memory Retrieval failed: {e}")
         return ""
+
+# --- 6. LLM CALLS ---
+
+def call_gemma4_31b(prompt_text):
+    """Call Gemma 4 31B from Google AI Studio to create user prompt."""
+    if not GOOGLE_API_KEY:
+        return "Error: Google API Key not configured."
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b:generateContent?key={GOOGLE_API_KEY}"
+    
+    payload = {
+        "contents": [{
+            "parts": [{
+                "text": f"""You are a prompt engineer. Your task is to:
+1. Analyze the user's raw entry
+2. Retrieve relevant legal context from the knowledge base
+3. Synthesize a comprehensive, well-structured prompt (Output1) that includes:
+   - User's core question/request
+   - Relevant legal facts and context
+   - Clear instructions for the LLMs
+
+User Entry: {prompt_text}
+
+Return ONLY the synthesized prompt (Output1), nothing else."""
+            }]
+        }]
+    }
+    
+    headers = {"Content-Type": "application/json"}
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating prompt.")
+    except Exception as e:
+        return f"Error calling Gemma 4 31B: {e}"
+
+def call_openrouter_a(prompt_text):
+    """Call LLM A (GPT-OSS-120B) from OpenRouter."""
+    if not OPENROUTER_API_KEY:
+        return "Error: OpenRouter API Key not configured."
+    
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    
+    payload = {
+        "model": OPENROUTER_MODEL_A,
+        "messages": [
+            {"role": "system", "content": "You are a Senior Legal Strategist. Provide comprehensive legal analysis and strategy based on the prompt provided."},
+            {"role": "user", "content": prompt_text}
+        ]
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://vmindai.streamlit.app",
+        "X-Title": "VMindAI Legal Strategist"
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+    except Exception as e:
+        return f"Error calling LLM A: {e}"
+
+def call_openrouter_b(prompt_text):
+    """Call LLM B (Nemotron-3-Super-120B) from OpenRouter."""
+    if not OPENROUTER_API_KEY:
+        return "Error: OpenRouter API Key not configured."
+    
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    
+    payload = {
+        "model": OPENROUTER_MODEL_B,
+        "messages": [
+            {"role": "system", "content": "You are a Senior Legal Strategist. Provide comprehensive legal analysis and strategy based on the prompt provided."},
+            {"role": "user", "content": prompt_text}
+        ]
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://vmindai.streamlit.app",
+        "X-Title": "VMindAI Legal Strategist"
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+    except Exception as e:
+        return f"Error calling LLM B: {e}"
+
+def call_gemini_flash_synthesize(output1, output2, output3):
+    """Call Gemini 3 Flash to synthesize outputs into master output."""
+    if not GOOGLE_API_KEY:
+        return "Error: Google API Key not configured."
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-flash-exp:generateContent?key={GOOGLE_API_KEY}"
+    
+    prompt_text = f"""You are a Senior Legal Editor. Your task is to synthesize three legal outputs into one master output.
+
+Output 1 (User Prompt & Context): {output1}
+
+Output 2 (LLM A - GPT-OSS): {output2}
+
+Output 3 (LLM B - Nemotron): {output3}
+
+Synthesize these outputs into a cohesive, comprehensive master output that:
+1. Integrates the strongest insights from all three outputs
+2. Resolves any contradictions
+3. Provides a unified, authoritative legal strategy
+4. Maintains professional legal tone
+
+Return ONLY the master output, nothing else."""
+    
+    payload = {
+        "contents": [{
+            "parts": [{
+                "text": prompt_text
+            }]
+        }]
+    }
+    
+    headers = {"Content-Type": "application/json"}
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error synthesizing outputs.")
+    except Exception as e:
+        return f"Error calling Gemini Flash: {e}"
 
 # --- 7. UI SETUP ---
 st.set_page_config(page_title="Legal Strategist", layout="wide")
@@ -130,18 +275,18 @@ st.title("⚖️ Principal Legal Advisor")
 if "messages" not in st.session_state:
     raw_history = load_history(USER_IDENTITY)
     st.session_state.messages = []
-    temp_pair = {}
+    temp_data = {}
     for item in raw_history:
         if item['role'] == 'user':
-            temp_pair = {"user": item['text'], "u_id": item['id']}
-        elif item['role'] == 'assistant' and "user" in temp_pair:
+            temp_data = {"user": item['text'], "u_id": item['id']}
+        elif item['role'] == 'assistant' and "user" in temp_data:
             st.session_state.messages.append({
-                "user": temp_pair["user"], 
+                "user": temp_data["user"], 
                 "assistant": item['text'],
-                "u_id": temp_pair["u_id"],
+                "u_id": temp_data["u_id"],
                 "a_id": item['id']
             })
-            temp_pair = {}
+            temp_data = {}
 
 # --- 8. DISPLAY HISTORY ---
 st.subheader("Consultation History")
@@ -156,66 +301,118 @@ for i, entry in enumerate(st.session_state.messages):
         if st.button(f"🗑️ Delete Interaction {i+1}", key=f"del_{i}"):
             delete_interaction([entry["u_id"], entry["a_id"]], i)
 
-# --- 9. CHAT ENGINE (AUGMENTED GENERATION) ---
+# --- 9. CHAT ENGINE (MULTI-LLM PIPELINE) ---
 client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
 
-if prompt := st.chat_input("Enter your reply affidavit draft..."):
+if prompt := st.chat_input("Enter your legal query or draft..."):
     with st.chat_message("assistant"):
-        with st.status("Accessing Legal Memory & Analyzing Lapses...", expanded=True) as status:
+        with st.status("Processing Legal Query...", expanded=True) as status:
             try:
-                # STEP 1: RETRIEVE
+                # STEP 1: RETRIEVE CONTEXT
                 past_context = retrieve_relevant_context(prompt)
+                status.update(label="Retrieving legal memory...", state="running")
                 
-                # STEP 2: AUGMENT
-                full_input = f"""
-                ### RELEVANT CASE CONTEXT FROM PREVIOUS INTERACTIONS:
-                {past_context}
-
-                ### CURRENT USER DRAFT TO REVISE:
-                {prompt}
-                """
-
-                # STEP 3: GENERATE
-                response = client.models.generate_content(
-                    model=MODEL_ID,
-                    contents=full_input,
-                    config=types.GenerateContentConfig(thinking_config=types.ThinkingConfig(include_thoughts=True), temperature=0.0)
-                )
+                # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using Gemma 4 31B
+                status.update(label="Generating optimized user prompt (Output 1)...", state="running")
+                output1 = call_gemma4_31b(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 
-                final_answer = ""
-                for part in response.candidates[0].content.parts:
-                    if part.thought:
-                        with st.expander("🔍 INTERNAL GAP ANALYSIS", expanded=True):
-                            st.info(clean_legal_text(part.text))
-                    else:
-                        final_answer += part.text
-
-                # STEP 4: ARCHIVE (New context becomes searchable for future prompts)
-                if final_answer:
-                    st.write("💾 Archiving to Zilliz...")
-                    safe_final = final_answer[:59000]
-                    safe_prompt = prompt[:59000]
-                    
-                    u_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_prompt).embeddings[0].values
-                    a_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_final).embeddings[0].values
-                    
-                    res = collection.insert([
-                        [u_emb, a_emb], 
-                        [safe_prompt, safe_final], 
-                        [USER_IDENTITY, USER_IDENTITY], 
-                        ["user", "assistant"]
-                    ])
-                    collection.flush()
-                    
-                    # Update local state immediately
-                    p_keys = res.primary_keys
-                    st.session_state.messages.append({
-                        "user": prompt, "assistant": final_answer,
-                        "u_id": p_keys[0], "a_id": p_keys[1]
-                    })
-                    
-                status.update(label="Strategic Revision Complete", state="complete", expanded=False)
-                st.rerun() 
+                # STEP 3: GENERATE OUTPUT 2 using LLM A (OpenRouter)
+                status.update(label="Generating strategy with LLM A (GPT-OSS-120B)...", state="running")
+                output2 = call_openrouter_a(output1)
+                
+                # STEP 4: GENERATE OUTPUT 3 using LLM B (OpenRouter)
+                status.update(label="Generating strategy with LLM B (Nemotron-3-Super-120B)...", state="running")
+                output3 = call_openrouter_b(output1)
+                
+                # STEP 5: SYNTHESIZE using Gemini 3 Flash
+                status.update(label="Synthesizing master output with Gemini 3 Flash...", state="running")
+                master_output = call_gemini_flash_synthesize(output1, output2, output3)
+                
+                # STEP 6: ARCHIVE ALL OUTPUTS TO ZILLIZ
+                status.update(label="Archiving to Zilliz...", state="running")
+                
+                # Create embeddings for all outputs
+                safe_prompt = prompt[:59000]
+                safe_output1 = output1[:59000] if output1 else ""
+                safe_output2 = output2[:59000] if output2 else ""
+                safe_output3 = output3[:59000] if output3 else ""
+                safe_master = master_output[:59000] if master_output else ""
+                
+                # Generate embeddings
+                try:
+                    prompt_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_prompt).embeddings[0].values
+                    output1_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output1).embeddings[0].values if safe_output1 else None
+                    output2_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output2).embeddings[0].values if safe_output2 else None
+                    output3_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output3).embeddings[0].values if safe_output3 else None
+                    master_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_master).embeddings[0].values if safe_master else None
+                except:
+                    prompt_emb = [0.0] * 768
+                    output1_emb = [0.0] * 768 if safe_output1 else None
+                    output2_emb = [0.0] * 768 if safe_output2 else None
+                    output3_emb = [0.0] * 768 if safe_output3 else None
+                    master_emb = [0.0] * 768 if safe_master else None
+                
+                # Insert all outputs into Zilliz
+                insert_data = [[prompt_emb], [safe_prompt], [USER_IDENTITY], ["user_prompt"]]
+                if output1_emb:
+                    insert_data[0].append(output1_emb)
+                    insert_data[1].append(safe_output1)
+                    insert_data[2].append(USER_IDENTITY)
+                    insert_data[3].append("output1_user_prompt")
+                if output2_emb:
+                    insert_data[0].append(output2_emb)
+                    insert_data[1].append(safe_output2)
+                    insert_data[2].append(USER_IDENTITY)
+                    insert_data[3].append("output2_llm_a")
+                if output3_emb:
+                    insert_data[0].append(output3_emb)
+                    insert_data[1].append(safe_output3)
+                    insert_data[2].append(USER_IDENTITY)
+                    insert_data[3].append("output3_llm_b")
+                if master_emb:
+                    insert_data[0].append(master_emb)
+                    insert_data[1].append(safe_master)
+                    insert_data[2].append(USER_IDENTITY)
+                    insert_data[3].append("master_output")
+                
+                res = collection.insert(insert_data)
+                collection.flush()
+                
+                # Update local state
+                p_keys = res.primary_keys
+                st.session_state.messages.append({
+                    "user": prompt, 
+                    "assistant": master_output,
+                    "u_id": p_keys[0], 
+                    "a_id": p_keys[-1] if len(p_keys) > 1 else p_keys[0]
+                })
+                
+                status.update(label="Legal Analysis Complete", state="complete", expanded=False)
+                
+                # Display outputs
+                st.subheader("📊 Multi-LLM Pipeline Output")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    with st.expander("📝 Output 1: Optimized User Prompt", expanded=True):
+                        st.markdown(clean_legal_text(output1))
+                
+                with col2:
+                    with st.expander("🤖 Output 2: LLM A (GPT-OSS-120B)", expanded=True):
+                        st.markdown(clean_legal_text(output2))
+                
+                col3, col4 = st.columns(2)
+                
+                with col3:
+                    with st.expander("⚡ Output 3: LLM B (Nemotron-3-Super-120B)", expanded=True):
+                        st.markdown(clean_legal_text(output3))
+                
+                with col4:
+                    with st.expander("🏆 Master Output: Gemini 3 Flash Synthesis", expanded=True):
+                        st.markdown(clean_legal_text(master_output))
+                
+                st.rerun()
                 
             except Exception as e:
-                st.error(f"Logic Engine Error: {e}")
+                st.error(f"Pipeline Error: {e}")
