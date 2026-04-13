@@ -38,7 +38,7 @@ OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 
 # Google AI Studio Configuration
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
-GEMMA_MODEL = "gemma-4-31b"
+GEMMA_MODEL = "gemma-4-31b-it"
 GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
 
 # --- 1.5. API KEY VALIDATION ---
@@ -185,7 +185,7 @@ def call_gemma4_31b(prompt_text):
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b:generateContent?key={GOOGLE_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key={GOOGLE_API_KEY}"
     
     payload = {
         "contents": [{
