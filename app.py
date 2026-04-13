@@ -38,7 +38,6 @@ OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 
 # Google AI Studio Configuration
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
-GEMMA_MODEL = "gemma-4-31b-it"
 GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
 
 # --- 2. LOGIN GATE ---
@@ -140,12 +139,12 @@ def retrieve_relevant_context(query_text, top_k=3):
 
 # --- 6. LLM CALLS ---
 
-def call_gemma4_31b(prompt_text):
-    """Call Gemma 4 31B from Google AI Studio to create user prompt."""
+def call_gemini_prompt_creator(prompt_text):
+    """Call Gemini 3 Flash from Google AI Studio to create user prompt."""
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key={GOOGLE_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_FLASH_MODEL}:generateContent?key={GOOGLE_API_KEY}"
     
     payload = {
         "contents": [{
@@ -173,7 +172,7 @@ Return ONLY the synthesized prompt (Output1), nothing else."""
         data = response.json()
         return data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating prompt.")
     except Exception as e:
-        return f"Error calling Gemma 4 31B: {e}"
+        return f"Error calling Gemini Prompt Creator: {e}"
 
 def call_openrouter_a(prompt_text):
     """Call LLM A (GPT-OSS-120B) from OpenRouter."""
@@ -357,9 +356,9 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 past_context = retrieve_relevant_context(prompt)
                 status.update(label="Retrieving memory...", state="running")
                 
-                # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using Gemma 4 31B
+                # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using Gemini Prompt Creator
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
-                output1 = call_gemma4_31b(f"Context: {past_context}\n\nUser Entry: {prompt}")
+                output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 
                 # STEP 3: GENERATE OUTPUT 2 using LLM A (OpenRouter)
                 status.update(label="Generating strategy with LLM A (GPT-OSS-120B)...", state="running")
