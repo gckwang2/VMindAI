@@ -40,6 +40,10 @@ OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
 
+# Hugging Face Configuration
+HUGGINGFACE_API_KEY = get_secret("HUGGINGFACE_API_KEY")
+HF_MODEL = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+
 # --- 2. LOGIN GATE ---
 def check_password():
     if "passwords" not in st.secrets:
@@ -234,14 +238,43 @@ def call_openrouter_b(prompt_text):
     except Exception as e:
         return f"Error calling LLM B: {e}"
 
-def call_gemini_flash_synthesize(output1, output2, output3):
+def call_huggingface_llm(prompt_text):
+    """Call Hugging Face LLM."""
+    if not HUGGINGFACE_API_KEY:
+        return "Error: Hugging Face API Key not configured."
+    
+    url = f"https://api-inference.huggingface.co/models/{HF_MODEL}/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {HUGGINGFACE_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": HF_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
+            {"role": "user", "content": prompt_text}
+        ],
+        "max_tokens": 1000
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+    except Exception as e:
+        return f"Error calling Hugging Face: {e}"
+
+def call_gemini_flash_synthesize(output1, output2, output3, output4):
     """Call Gemini 3 Flash to synthesize outputs into master output."""
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_FLASH_MODEL}:generateContent?key={GOOGLE_API_KEY}"
     
-    prompt_text = f"""You are an Expert Editor. Your task is to synthesize two AI responses into one master response, based on the original context and prompt.
+    prompt_text = f"""You are an Expert Editor. Your task is to synthesize three AI responses into one master response, based on the original context and prompt.
 
 Original Prompt & Context (Output 1):
 {output1}
@@ -252,8 +285,11 @@ Response A (LLM A - GPT-OSS):
 Response B (LLM B - Nemotron):
 {output3}
 
-Synthesize Response A and Response B into a cohesive, comprehensive master output that:
-1. Integrates the strongest insights from both responses
+Response C (LLM C - Llama-4-Maverick):
+{output4}
+
+Synthesize Response A, Response B, and Response C into a cohesive, comprehensive master output that:
+1. Integrates the strongest insights from all responses
 2. Resolves any contradictions
 3. Provides a unified, authoritative response
 4. Maintains a professional tone
@@ -297,6 +333,7 @@ if "messages" not in st.session_state:
                 "output1": "", "o1_id": None,
                 "output2": "", "o2_id": None,
                 "output3": "", "o3_id": None,
+                "output4": "", "o4_id": None,
                 "master": "", "m_id": None,
                 "all_ids": [item['id']]
             }
@@ -311,6 +348,9 @@ if "messages" not in st.session_state:
             elif role == 'output3_llm_b':
                 current_interaction["output3"] = item['text']
                 current_interaction["o3_id"] = item['id']
+            elif role == 'output4_llm_c':
+                current_interaction["output4"] = item['text']
+                current_interaction["o4_id"] = item['id']
             elif role in ['assistant', 'master_output']:
                 current_interaction["master"] = item['text']
                 current_interaction["m_id"] = item['id']
@@ -339,6 +379,11 @@ for i, entry in enumerate(st.session_state.messages):
             st.markdown("---")
             st.markdown("**⚡ Output 3: LLM B (Nemotron-3-Super-120B):**")
             st.markdown(clean_text(entry['output3']))
+            
+        if entry.get('output4'):
+            st.markdown("---")
+            st.markdown("**🚀 Output 4: LLM C (Llama-4-Maverick-17B):**")
+            st.markdown(clean_text(entry['output4']))
             
         if entry.get('master'):
             st.markdown("---")
@@ -371,9 +416,13 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 status.update(label="Generating strategy with LLM B (Nemotron-3-Super-120B)...", state="running")
                 output3 = call_openrouter_b(output1)
                 
+                # STEP 4.5: GENERATE OUTPUT 4 using LLM C (Hugging Face)
+                status.update(label="Generating strategy with LLM C (Llama-4-Maverick-17B)...", state="running")
+                output4 = call_huggingface_llm(output1)
+                
                 # STEP 5: SYNTHESIZE using Gemini 3 Flash
                 status.update(label="Synthesizing master output with Gemini 3 Flash...", state="running")
-                master_output = call_gemini_flash_synthesize(output1, output2, output3)
+                master_output = call_gemini_flash_synthesize(output1, output2, output3, output4)
                 
                 # STEP 6: ARCHIVE ALL OUTPUTS TO ZILLIZ
                 status.update(label="Archiving to Zilliz...", state="running")
@@ -383,6 +432,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 safe_output1 = output1[:59000] if output1 else ""
                 safe_output2 = output2[:59000] if output2 else ""
                 safe_output3 = output3[:59000] if output3 else ""
+                safe_output4 = output4[:59000] if output4 else ""
                 safe_master = master_output[:59000] if master_output else ""
                 
                 # Generate embeddings
@@ -391,12 +441,14 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     output1_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output1).embeddings[0].values if safe_output1 else None
                     output2_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output2).embeddings[0].values if safe_output2 else None
                     output3_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output3).embeddings[0].values if safe_output3 else None
+                    output4_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output4).embeddings[0].values if safe_output4 else None
                     master_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_master).embeddings[0].values if safe_master else None
                 except:
                     prompt_emb = [0.0] * 768
                     output1_emb = [0.0] * 768 if safe_output1 else None
                     output2_emb = [0.0] * 768 if safe_output2 else None
                     output3_emb = [0.0] * 768 if safe_output3 else None
+                    output4_emb = [0.0] * 768 if safe_output4 else None
                     master_emb = [0.0] * 768 if safe_master else None
                 
                 # Insert all outputs into Zilliz
@@ -416,6 +468,11 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     insert_data[1].append(safe_output3)
                     insert_data[2].append(USER_IDENTITY)
                     insert_data[3].append("output3_llm_b")
+                if output4_emb:
+                    insert_data[0].append(output4_emb)
+                    insert_data[1].append(safe_output4)
+                    insert_data[2].append(USER_IDENTITY)
+                    insert_data[3].append("output4_llm_c")
                 if master_emb:
                     insert_data[0].append(master_emb)
                     insert_data[1].append(safe_master)
@@ -429,7 +486,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 p_keys = res.primary_keys
                 
                 idx = 1
-                o1_id = o2_id = o3_id = m_id = None
+                o1_id = o2_id = o3_id = o4_id = m_id = None
                 if output1_emb:
                     o1_id = p_keys[idx]
                     idx += 1
@@ -438,6 +495,9 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     idx += 1
                 if output3_emb:
                     o3_id = p_keys[idx]
+                    idx += 1
+                if output4_emb:
+                    o4_id = p_keys[idx]
                     idx += 1
                 if master_emb:
                     m_id = p_keys[idx]
@@ -448,6 +508,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     "output1": output1, "o1_id": o1_id,
                     "output2": output2, "o2_id": o2_id,
                     "output3": output3, "o3_id": o3_id,
+                    "output4": output4, "o4_id": o4_id,
                     "master": master_output, "m_id": m_id,
                     "all_ids": p_keys
                 })
@@ -474,8 +535,12 @@ if prompt := st.chat_input("Enter your query or draft..."):
                         st.markdown(clean_text(output3))
                 
                 with col4:
-                    with st.expander("🏆 Master Output: Gemini 3 Flash Synthesis", expanded=True):
-                        st.markdown(clean_text(master_output))
+                    with st.expander("🚀 Output 4: LLM C (Llama-4-Maverick-17B)", expanded=True):
+                        st.markdown(clean_text(output4))
+                        
+                st.markdown("---")
+                with st.expander("🏆 Master Output: Gemini 3 Flash Synthesis", expanded=True):
+                    st.markdown(clean_text(master_output))
                 
                 st.rerun()
                 
