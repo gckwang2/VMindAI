@@ -15,7 +15,7 @@ from LLMLogic import (
     call_groq_llm,
     call_gemini_flash_synthesize
 )
-from storage import (
+from Storage import (
     load_history,
     store_interaction,
     delete_interaction,
