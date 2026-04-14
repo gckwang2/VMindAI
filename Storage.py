@@ -77,3 +77,24 @@ def delete_interaction(uri, token, ids_to_delete):
     except Exception as e:
         st.error(f"Deletion failed: {e}")
         return False
+
+def init_auth_db(uri, token):
+    """Initializes/Returns the authentication collection."""
+    connections.connect(uri=uri, token=token)
+    col_name = "user_credentials_v1"
+    if not utility.has_collection(col_name):
+        fields = [
+            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
+            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=128),
+            FieldSchema(name="username", dtype=DataType.VARCHAR, max_length=100),
+            FieldSchema(name="encrypted_password", dtype=DataType.VARCHAR, max_length=512),
+            FieldSchema(name="encrypted_zilliz_token", dtype=DataType.VARCHAR, max_length=1024),
+            FieldSchema(name="zilliz_uri", dtype=DataType.VARCHAR, max_length=512)
+        ]
+        schema = CollectionSchema(fields)
+        col = Collection(col_name, schema)
+        col.create_index("vector", {"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 128}})
+    else:
+        col = Collection(col_name)
+    col.load()
+    return col
