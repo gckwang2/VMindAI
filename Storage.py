@@ -27,6 +27,16 @@ def get_active_collection(uri, token):
     """Gets collection using provided credentials."""
     return init_zilliz(uri, token)
 
+def get_active_credentials():
+    """Gets active Zilliz credentials from session state."""
+    if st.session_state.get("user_zilliz_uri") and st.session_state.get("user_zilliz_token"):
+        from cryptography.fernet import Fernet
+        cipher = Fernet(st.secrets["ENCRYPTION_KEY"])
+        uri = cipher.decrypt(st.session_state["user_zilliz_uri"].encode()).decode()
+        token = cipher.decrypt(st.session_state["user_zilliz_token"].encode()).decode()
+        return uri, token
+    return None, None
+
 def load_history(uri, token, session_id):
     """Retrieves interaction history for a session."""
     try:
