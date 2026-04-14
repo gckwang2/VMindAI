@@ -44,16 +44,6 @@ def get_secret(key):
     except Exception:
         return ""
 
-# Encryption Setup
-ENCRYPTION_KEY = get_secret("ENCRYPTION_KEY")
-cipher_suite = Fernet(ENCRYPTION_KEY.encode())
-
-def encrypt_data(data):
-    return cipher_suite.encrypt(data.encode()).decode()
-
-def decrypt_data(data):
-    return cipher_suite.decrypt(data.encode()).decode()
-
 # API Configurations
 DASHSCOPE_API_KEY = get_secret("DASHSCOPE_API_KEY")
 DASHSCOPE_MODEL = "qwen3.5-122b-a10b"

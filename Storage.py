@@ -1,7 +1,15 @@
 import streamlit as st
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
 
-# --- STORAGE FUNCTIONS ---
+def encrypt_data(data):
+    from cryptography.fernet import Fernet
+    cipher = Fernet(st.secrets["ENCRYPTION_KEY"].encode())
+    return cipher.encrypt(data.encode()).decode()
+
+def decrypt_data(data):
+    from cryptography.fernet import Fernet
+    cipher = Fernet(st.secrets["ENCRYPTION_KEY"].encode())
+    return cipher.decrypt(data.encode()).decode()
 
 def init_zilliz(uri, token):
     """Initializes/Returns the memory collection."""
