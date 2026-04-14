@@ -147,7 +147,7 @@ def retrieve_relevant_context(query_text, top_k=3):
 # --- 6. LLM CALLS ---
 
 def call_gemini_prompt_creator(prompt_text):
-    """Call Gemini 3 Flash from Google AI Studio to create user prompt."""
+    """Call gemini-3.1-flash-lite-preview from Google AI Studio to create user prompt."""
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
     
@@ -275,7 +275,7 @@ def call_groq_llm(prompt_text):
         return f"Error calling Groq: {e}"
 
 def call_gemini_flash_synthesize(output1, output2, outputA, output4):
-    """Call Gemini 3 Flash to synthesize outputs into master output."""
+    """Call gemini-3.1-flash-lite-preview to synthesize outputs into master output."""
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
     
@@ -411,13 +411,13 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 past_context = retrieve_relevant_context(prompt)
                 status.update(label="Retrieving memory...", state="running")
                 
-                # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using Gemini Prompt Creator
+                # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using LLM 1 (Gemini Prompt Creator - gemini-3.1-flash-lite-preview)
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
                 t0 = time.time()
                 raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 t1 = time.time() - t0
                 
-                # STEP 3: GENERATE OUTPUTS 2, 3, and 4 concurrently
+                # STEP 3: GENERATE OUTPUTS 2, A, and 4 concurrently using LLM 2 (GPT-OSS-120B), LLM 3 (Nemotron-3-Super-120B), and LLM 4 (Llama-4-Scout)
                 status.update(label="Generating strategies with LLMs concurrently...", state="running")
                 
                 def timed_call(func, arg):
@@ -435,8 +435,8 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     raw_outputA, tA = future_b.result()
                     raw_output4, t4 = future_c.result()
                 
-                # STEP 5: SYNTHESIZE using Gemini 3 Flash
-                status.update(label="Synthesizing master output with Gemini 3 Flash...", state="running")
+                # STEP 5: SYNTHESIZE using gemini-3.1-flash-lite-preview
+                status.update(label="Synthesizing master output with gemini-3.1-flash-lite-preview...", state="running")
                 t0 = time.time()
                 raw_master_output = call_gemini_flash_synthesize(raw_output1, raw_output2, raw_outputA, raw_output4)
                 t_master = time.time() - t0
@@ -562,7 +562,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                         st.markdown(clean_text(output4))
                         
                 st.markdown("---")
-                with st.expander("🏆 Master Output: Gemini 3 Flash Synthesis", expanded=True):
+                    with st.expander("🏆 Master Output: Synthesis (gemini-3.1-flash-lite-preview)", expanded=True):
                     st.markdown(clean_text(master_output))
                 
                 st.rerun()
