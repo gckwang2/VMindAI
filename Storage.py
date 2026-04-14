@@ -3,8 +3,15 @@ from pymilvus import connections, Collection, utility, FieldSchema, CollectionSc
 
 def _get_encryption_key():
     """Helper to get ENCRYPTION_KEY from nested or flat secrets format."""
-    secret = st.secrets.get("ENCRYPTION_KEY", {})
+    # Assuming user defined [ENCRYPTION_KEY] in secrets.toml
+    # Accessing it directly might return the dict or the value.
+    # Let's inspect what st.secrets["ENCRYPTION_KEY"] returns.
+    secret = st.secrets.get("ENCRYPTION_KEY")
     if isinstance(secret, dict):
+        # If it's a section [ENCRYPTION_KEY], it contains key/value pairs
+        # The user said:
+        # [ENCRYPTION_KEY]
+        # ENCRYPTION_KEY = "-YN34Dk30pjDzL0="
         return secret.get("ENCRYPTION_KEY", "")
     return secret
 
@@ -13,7 +20,14 @@ def encrypt_data(data):
     key = _get_encryption_key()
     if not key:
         raise ValueError("ENCRYPTION_KEY not found in secrets")
-    cipher = Fernet(key.encode())
+    # key needs to be 32 bytes base64 encoded.
+    # The provided key "-YN34Dk30pjDzL0=" looks suspicious. 
+    # Fernet keys MUST be 32 URL-safe base64-encoded bytes.
+    # I'll try to use it as is, but if it fails, the key itself is wrong.
+    try:
+        cipher = Fernet(key.encode())
+    except Exception as e:
+        raise ValueError(f"Invalid Fernet key: {e}. Key must be 32-byte base64-encoded.")
     return cipher.encrypt(data.encode()).decode()
 
 def decrypt_data(data):
@@ -21,7 +35,10 @@ def decrypt_data(data):
     key = _get_encryption_key()
     if not key:
         raise ValueError("ENCRYPTION_KEY not found in secrets")
-    cipher = Fernet(key.encode())
+    try:
+        cipher = Fernet(key.encode())
+    except Exception as e:
+        raise ValueError(f"Invalid Fernet key: {e}. Key must be 32-byte base64-encoded.")
     return cipher.decrypt(data.encode()).decode()
 
 def init_zilliz(uri, token):
