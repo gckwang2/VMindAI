@@ -6,7 +6,15 @@ import requests
 import concurrent.futures
 import time
 import datetime
+from cryptography.fernet import Fernet
 from MetaLlama4 import call_meta_ai
+from LLMLogic import (
+    call_gemini_prompt_creator,
+    call_qwen,
+    call_gemini_pro,
+    call_groq_llm,
+    call_gemini_flash_synthesize
+)
 from google import genai
 from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
@@ -18,11 +26,9 @@ USER_IDENTITY = "Generic_Ensemble_User"
 def get_secret(key):
     try:
         val = st.secrets[key]
-        # If it's dict-like
         if hasattr(val, "get"):
             v = val.get(key, val)
             if isinstance(v, str): return v
-        # If it's a string that looks like a dict
         if isinstance(val, str) and val.strip().startswith("{"):
             import ast
             parsed = ast.literal_eval(val.strip())
@@ -31,6 +37,16 @@ def get_secret(key):
         return val
     except Exception:
         return ""
+
+# Encryption Setup
+ENCRYPTION_KEY = get_secret("ENCRYPTION_KEY")
+cipher_suite = Fernet(ENCRYPTION_KEY.encode())
+
+def encrypt_data(data):
+    return cipher_suite.encrypt(data.encode()).decode()
+
+def decrypt_data(data):
+    return cipher_suite.decrypt(data.encode()).decode()
 
 # DashScope Configuration
 DASHSCOPE_API_KEY = get_secret("DASHSCOPE_API_KEY")
@@ -45,94 +61,16 @@ GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
 GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-# --- 2. AUTHENTICATION & SIDEBAR ---
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+# --- 2. ZILLIZ & UTILS ---
 
-@st.dialog("Authentication Required")
-def show_auth_dialog():
-    if st.session_state.get("awaiting_verification", False):
-        st.write("### Verify your Email")
-        st.write(f"A 6-digit code has been sent to **{st.session_state.get('signup_email')}**.")
-        st.info("*(Demo Mode: Enter '123456' to verify)*")
-        code = st.text_input("6-Digit Code", max_chars=6)
-        if st.button("Verify & Login", use_container_width=True):
-            if code == "123456":
-                st.session_state["logged_in"] = True
-                st.session_state["username"] = st.session_state["signup_email"]
-                st.session_state["awaiting_verification"] = False
-                st.success("Successfully verified and logged in!")
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.error("Invalid code.")
-    else:
-        tab1, tab2 = st.tabs(["Login", "Sign Up"])
-        with tab1:
-            st.button("Continue with Google", icon="🌐", use_container_width=True)
-            st.markdown("<div style='text-align: center'>or</div>", unsafe_allow_html=True)
-            l_email = st.text_input("Email / Username", key="l_email")
-            l_pwd = st.text_input("Password", type="password", key="l_pwd")
-            if st.button("Login", use_container_width=True):
-                if "passwords" in st.secrets and l_email in st.secrets["passwords"] and st.secrets["passwords"][l_email] == l_pwd:
-                    st.session_state["logged_in"] = True
-                    st.session_state["username"] = l_email
-                    st.success("Logged in successfully!")
-                    time.sleep(1)
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password.")
-        with tab2:
-            st.button("Sign Up with Google", icon="🌐", use_container_width=True, key="su_google")
-            st.markdown("<div style='text-align: center'>or</div>", unsafe_allow_html=True)
-            s_email = st.text_input("Email", key="s_email")
-            s_pwd = st.text_input("Password", type="password", key="s_pwd")
-            s_pwd2 = st.text_input("Confirm Password", type="password", key="s_pwd2")
-            if st.button("Sign Up", use_container_width=True):
-                if s_email and s_pwd and s_pwd == s_pwd2:
-                    st.session_state["signup_email"] = s_email
-                    st.session_state["awaiting_verification"] = True
-                    st.rerun()
-                else:
-                    st.error("Please fill all fields correctly and ensure passwords match.")
-
-@st.dialog("Cloud Storage Configuration")
-def show_cloud_dialog():
-    st.write("### Connect Zilliz Vector DB")
-    st.info("**How to get your API Key:**\n1. Log into your Zilliz Cloud Console.\n2. Navigate to your cluster.\n3. Go to **Access Management** > **API Keys**.\n4. Create and copy a new key.")
-    st.warning("⚠️ **Storage Limit:** You can only store up to 5GB of data. If you require more than 5GB, please contact us at **support@vmind.ai**.")
-    
-    zilliz_key = st.text_input("Zilliz API Key", type="password", value=st.session_state.get("zilliz_api_key", ""))
-    if st.button("Save Configuration", use_container_width=True):
-        st.session_state["zilliz_api_key"] = zilliz_key
-        st.success("Cloud storage key saved for this session!")
-        time.sleep(1)
-        st.rerun()
-
-with st.sidebar:
-    st.title("⚙️ Settings")
-    if not st.session_state["logged_in"]:
-        if st.button("Login / Sign Up", use_container_width=True, type="primary"):
-            show_auth_dialog()
-    else:
-        st.success(f"Logged in as:\n**{st.session_state.get('username', 'User')}**")
-        if st.button("Logout", use_container_width=True):
-            st.session_state["logged_in"] = False
-            st.rerun()
-            
-    st.markdown("---")
-    if st.button("☁️ Connect Cloud Storage", use_container_width=True):
-        show_cloud_dialog()
-
-# --- 3. ZILLIZ & UTILS ---
 @st.cache_resource
-def init_zilliz(token):
-    connections.connect(uri=st.secrets["ZILLIZ_URI"], token=token)
+def init_zilliz_v2(uri, token):
+    connections.connect(uri=uri, token=token)
     col_name = "ensemble_memory_v1"
     if not utility.has_collection(col_name):
         fields = [
             FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=768),
+            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=768), 
             FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=60000), 
             FieldSchema(name="session_id", dtype=DataType.VARCHAR, max_length=100),
             FieldSchema(name="role", dtype=DataType.VARCHAR, max_length=20)
@@ -145,36 +83,39 @@ def init_zilliz(token):
     col.load()
     return col
 
-zilliz_token = st.session_state.get("zilliz_api_key") or st.secrets.get("ZILLIZ_TOKEN")
-collection = init_zilliz(zilliz_token)
+# ... (other functions)
 
-def clean_text(text):
-    if not text: return ""
-    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
-    return text.replace("add−back", "add-back").replace("S$", "S$ ").replace("\n", "\n\n")
+def populate_test_user():
+    # Only populate if we have a logged-in user or session context with credentials
+    if not st.session_state.get("user_zilliz_uri"):
+        return
+    
+    auth_col = init_auth_db(
+        decrypt_data(st.session_state["user_zilliz_uri"]),
+        decrypt_data(st.session_state["user_zilliz_token"])
+    )
+    # ... rest of population logic
 
-def load_history(session_id):
-    try:
-        results = collection.query(expr=f'session_id == "{session_id}"', output_fields=["id", "text", "role"])
-        return sorted(results, key=lambda x: x['id'])
-    except:
-        return []
+# Run population on startup
+# populate_test_user()  # Disabled since we can't guarantee secrets are present
 
-def delete_interaction(ids_to_delete, index_in_state):
-    try:
-        delete_expr = f"id in {ids_to_delete}"
-        collection.delete(delete_expr)
-        collection.flush()
-        st.session_state.messages.pop(index_in_state)
-        st.success("Interaction purged from memory.")
-        st.rerun()
-    except Exception as e:
-        st.error(f"Deletion failed: {e}")
+def get_active_collection():
+    if st.session_state.get("logged_in") and st.session_state.get("user_zilliz_uri"):
+        try:
+            uri = decrypt_data(st.session_state["user_zilliz_uri"])
+            token = decrypt_data(st.session_state["user_zilliz_token"])
+            return init_zilliz_v2(uri, token)
+        except Exception as e:
+            st.error(f"Error decrypting user credentials: {e}")
+    # If not logged in or no credentials, show warning and return None
+    st.warning("Please log in to access your data.")
+    return None
 
-# --- 5. RAG RETRIEVAL ENGINE ---
-def retrieve_relevant_context(query_text, top_k=3):
+def retrieve_relevant_context(query_text, session_id, top_k=3):
     """Semantic search to pull relevant facts from Zilliz."""
-    if collection.num_entities == 0:
+    uri, token = get_active_credentials()
+    col = init_zilliz_v2(uri, token)
+    if not col or col.num_entities == 0:
         return ""
         
     try:
@@ -184,7 +125,7 @@ def retrieve_relevant_context(query_text, top_k=3):
         ).embeddings[0].values
         
         search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-        results = collection.search(
+        results = col.search(
             data=[search_emb], 
             anns_field="vector", 
             param=search_params, 
@@ -245,7 +186,7 @@ def call_qwen(prompt_text):
     if not DASHSCOPE_API_KEY:
         return "Error: DashScope API Key not configured."
     
-    # Use the OpenAI compatible endpoint for DashScope
+    # Use OpenAI-compatible endpoint for DashScope
     url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
     
     headers = {
@@ -377,10 +318,141 @@ Return ONLY the master output, nothing else."""
 
 # --- 7. UI SETUP ---
 st.set_page_config(page_title="Ensemble AI System", layout="wide")
-st.title("🤖 Multi-LLM Ensemble System")
 
 if "messages" not in st.session_state:
-    raw_history = load_history(USER_IDENTITY)
+    st.session_state.messages = []
+
+# Sidebar with login/logout
+with st.sidebar:
+    st.title("Ensemble AI System")
+    
+    if st.session_state.get("logged_in"):
+        st.success(f"Logged in as: {st.session_state.get('username', 'User')}")
+        if st.button("Logout", use_container_width=True):
+            st.session_state["logged_in"] = False
+            st.session_state.pop("user_zilliz_uri", None)
+            st.session_state.pop("user_zilliz_token", None)
+            st.session_state.pop("username", None)
+            st.session_state.messages = []
+            st.rerun()
+    else:
+        st.info("Please login to save interactions")
+        if st.button("Login / Sign Up", use_container_width=True):
+            # Show auth dialog inline
+            tab1, tab2 = st.tabs(["Login", "Sign Up"])
+            
+            with tab1:
+                st.markdown("### Login")
+                login_username = st.text_input("Username", key="login_username")
+                login_password = st.text_input("Password", type="password", key="login_password")
+                
+                if st.button("Login", use_container_width=True, key="login_btn"):
+                    if login_username and login_password:
+                        try:
+                            uri = st.secrets["ZILLIZ_URI"]
+                            token = st.secrets["ZILLIZ_TOKEN"]
+                            auth_col = init_auth_db(uri, token)
+                            
+                            results = auth_col.query(
+                                expr=f'username == "{login_username}"',
+                                output_fields=["encrypted_password", "encrypted_zilliz_token", "zilliz_uri"]
+                            )
+                            
+                            if results:
+                                stored_enc_pwd = results[0]["encrypted_password"]
+                                decrypted_pwd = decrypt_data(stored_enc_pwd)
+                                
+                                if decrypted_pwd == login_password:
+                                    st.session_state["logged_in"] = True
+                                    st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
+                                    st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
+                                    st.session_state["username"] = login_username
+                                    st.success("Login successful!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Invalid password")
+                            else:
+                                st.error("User not found")
+                        except Exception as e:
+                            st.error(f"Login error: {e}")
+                    else:
+                        st.error("Please enter username and password")
+            
+            with tab2:
+                st.markdown("### Create Account")
+                new_username = st.text_input("Username", key="signup_username")
+                new_password = st.text_input("Password", type="password", key="signup_password")
+                confirm_password = st.text_input("Confirm Password", type="password", key="signup_confirm")
+                new_zilliz_uri = st.text_input("Zilliz Cloud URI", key="signup_uri", placeholder="https://xxx.cloud.zilliz.com")
+                new_zilliz_token = st.text_input("Zilliz Token", type="password", key="signup_token")
+                
+                if st.button("Create Account", use_container_width=True, key="signup_btn"):
+                    if new_username and new_password and new_zilliz_uri and new_zilliz_token:
+                        if new_password != confirm_password:
+                            st.error("Passwords do not match")
+                        else:
+                            try:
+                                uri = st.session_state["user_zilliz_uri"]
+                                token = st.session_state["user_zilliz_token"]
+                                auth_col = init_auth_db(uri, token)
+                                
+                                existing = auth_col.query(
+                                    expr=f'username == "{new_username}"',
+                                    output_fields=["username"]
+                                )
+                                
+                                if existing:
+                                    st.error("Username already exists")
+                                else:
+                                    enc_pwd = encrypt_data(new_password)
+                                    enc_token = encrypt_data(new_zilliz_token)
+                                    enc_uri = encrypt_data(new_zilliz_uri)
+                                    dummy_vec = [0.0] * 128
+                                    
+                                    insert_data = [
+                                        [dummy_vec],
+                                        [new_username],
+                                        [enc_pwd],
+                                        [enc_token],
+                                        [enc_uri]
+                                    ]
+                                    auth_col.insert(insert_data)
+                                    auth_col.flush()
+                                    
+                                    st.success("Account created! Please login.")
+                                    time.sleep(1)
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Signup error: {e}")
+                    else:
+                        st.error("Please fill in all fields")
+            
+            st.markdown("---")
+            st.markdown("Don't have a Zilliz account?")
+            if st.button("Sign up for Cloud Storage", use_container_width=True):
+                st.markdown("[Sign up here](https://cloud.zilliz.com/signup)")
+    
+    st.markdown("---")
+    st.markdown("### Cloud Storage")
+    if st.button("Configure Cloud Storage", use_container_width=True):
+        show_cloud_storage_dialog()
+    
+    st.markdown("---")
+    st.markdown("**Supported LLMs:**")
+    st.markdown("- Qwen 3.5 122B")
+    st.markdown("- Gemini Pro")
+    st.markdown("- Llama-4-Scout")
+    st.markdown("- Gemini Flash Lite")
+
+st.title("Multi-LLM Ensemble System")
+
+# Only load history if logged in
+if st.session_state.get("logged_in"):
+    current_username = st.session_state["username"]
+    uri, token = get_active_credentials()
+
+    raw_history = load_history(uri, token, current_username)
     st.session_state.messages = []
     current_interaction = None
     for item in raw_history:
@@ -419,57 +491,152 @@ if "messages" not in st.session_state:
             elif role in ['assistant', 'master_output']:
                 current_interaction["master"] = item['text']
                 current_interaction["m_id"] = item['id']
-                
+
     if current_interaction is not None:
         st.session_state.messages.append(current_interaction)
 
-# --- 8. DISPLAY HISTORY ---
-st.subheader("Consultation History")
-for i, entry in enumerate(st.session_state.messages):
-    with st.expander(f"📂 Interaction {i+1}: {entry['user'][:50]}...", expanded=False):
-        st.markdown("**👤 Your Query:**")
-        st.write(entry['user'])
-        
-        if entry.get('output1'):
-            st.markdown("---")
-            st.markdown("**📝 Output 1: Optimized User Prompt:**")
-            st.markdown(clean_text(entry['output1']))
-            
-        if entry.get('output2'):
-            st.markdown("---")
-            st.markdown("**🤖 Output 2: LLM 2 (Qwen 3.5 122B):**")
-            st.markdown(clean_text(entry['output2']))
-            
-        if entry.get('output3'):
-            st.markdown("---")
-            st.markdown("**⚡ Output 3: LLM 3 (gemini-3.1-pro-preview):**")
-            st.markdown(clean_text(entry['output3']))
-            
-        if entry.get('output4'):
-            st.markdown("---")
-            st.markdown("**🚀 Output 4: LLM C (Llama-4-Scout-17B):**")
-            st.markdown(clean_text(entry['output4']))
-            
-        if entry.get('output5'):
-            st.markdown("---")
-            st.markdown("**🌐 Output 5: LLM 5 (Meta AI Web):**")
-            st.markdown(clean_text(entry['output5']))
-            
-        if entry.get('master'):
-            st.markdown("---")
-            st.markdown("**🏆 Output A: Master Synthesis:**")
-            st.markdown(clean_text(entry['master']))
-        
-        if st.button(f"🗑️ Delete Interaction {i+1}", key=f"del_{i}"):
-            delete_interaction(entry["all_ids"], i)
+    # --- 8. DISPLAY HISTORY ---
+    st.subheader("Consultation History")
+    for i, entry in enumerate(st.session_state.messages):
+        with st.expander(f"Interaction {i+1}: {entry['user'][:50]}...", expanded=False):
+            st.markdown("**Your Query:**")
+            st.write(entry['user'])
+
+            if entry.get('output1'):
+                st.markdown("---")
+                st.markdown("**Output 1: Optimized User Prompt:**")
+                st.markdown(clean_text(entry['output1']))
+
+            if entry.get('output2'):
+                st.markdown("---")
+                st.markdown("**Output 2: LLM 2 (Qwen 3.5 122B):**")
+                st.markdown(clean_text(entry['output2']))
+
+            if entry.get('output3'):
+                st.markdown("---")
+                st.markdown("**Output 3: LLM 3 (gemini-3.1-pro-preview):**")
+                st.markdown(clean_text(entry['output3']))
+
+            if entry.get('output4'):
+                st.markdown("---")
+                st.markdown("**Output 4: LLM C (Llama-4-Scout-17B):**")
+                st.markdown(clean_text(entry['output4']))
+
+            if entry.get('output5'):
+                st.markdown("---")
+                st.markdown("**Output 5: LLM 5 (Meta AI Web):**")
+                st.markdown(clean_text(entry['output5']))
+
+            if entry.get('master'):
+                st.markdown("---")
+                st.markdown("**Master Synthesis:**")
+                st.markdown(clean_text(entry['master']))
+
+            if st.button(f"Delete Interaction {i+1}", key=f"del_{i}"):
+                delete_interaction_wrapper(entry["all_ids"], i)
+else:
+    st.warning("Please log in to view interaction history.")
+
 
 # --- 9. CHAT ENGINE (MULTI-LLM PIPELINE) ---
-client = genai.Client(api_key=GOOGLE_API_KEY)
+
+def get_embedding(client, embed_model, text):
+    if not text: return None
+    try:
+        return client.models.embed_content(model=embed_model, contents=text).embeddings[0].values
+    except Exception as e:
+        print(f"Embedding Error: {e}")
+        return [0.0] * 768
 
 if prompt := st.chat_input("Enter your query or draft..."):
     if not st.session_state.get("logged_in", False):
         st.session_state["pending_prompt"] = prompt
-        show_auth_dialog()
+        # Show inline auth dialog using tabs
+        auth_tab1, auth_tab2 = st.tabs(["Login", "Sign Up"])
+        with auth_tab1:
+            st.markdown("### Login")
+            login_username = st.text_input("Username", key="login_username_inline")
+            login_password = st.text_input("Password", type="password", key="login_password_inline")
+            if st.button("Login", use_container_width=True, key="login_inline_btn"):
+                if login_username and login_password:
+                    try:
+                        uri = st.secrets["ZILLIZ_URI"]
+                        token = st.secrets["ZILLIZ_TOKEN"]
+                        auth_col = init_auth_db(uri, token)
+                        results = auth_col.query(
+                            expr=f'username == "{login_username}"',
+                            output_fields=["encrypted_password", "encrypted_zilliz_token", "zilliz_uri"]
+                        )
+                        if results:
+                            stored_enc_pwd = results[0]["encrypted_password"]
+                            decrypted_pwd = decrypt_data(stored_enc_pwd)
+                            if decrypted_pwd == login_password:
+                                st.session_state["logged_in"] = True
+                                st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
+                                st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
+                                st.session_state["username"] = login_username
+                                st.success("Login successful!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Invalid password")
+                        else:
+                            st.error("User not found")
+                    except Exception as e:
+                        st.error(f"Login error: {e}")
+                else:
+                    st.error("Please enter username and password")
+        
+        with auth_tab2:
+            st.markdown("### Create Account")
+            new_username = st.text_input("Username", key="signup_username_inline")
+            new_password = st.text_input("Password", type="password", key="signup_password_inline")
+            confirm_password = st.text_input("Confirm Password", type="password", key="signup_confirm_inline")
+            new_zilliz_uri = st.text_input("Zilliz Cloud URI", key="signup_uri_inline", placeholder="https://xxx.cloud.zilliz.com")
+            new_zilliz_token = st.text_input("Zilliz Token", type="password", key="signup_token_inline")
+            if st.button("Create Account", use_container_width=True, key="signup_inline_btn"):
+                if new_username and new_password and new_zilliz_uri and new_zilliz_token:
+                    if new_password != confirm_password:
+                        st.error("Passwords do not match")
+                    else:
+                        try:
+                            uri = st.session_state["user_zilliz_uri"]
+                            token = st.session_state["user_zilliz_token"]
+                            auth_col = init_auth_db(uri, token)
+                            existing = auth_col.query(
+                                expr=f'username == "{new_username}"',
+                                output_fields=["username"]
+                            )
+                            if existing:
+                                st.error("Username already exists")
+                            else:
+                                enc_pwd = encrypt_data(new_password)
+                                enc_token = encrypt_data(new_zilliz_token)
+                                enc_uri = encrypt_data(new_zilliz_uri)
+                                dummy_vec = [0.0] * 128
+                                insert_data = [
+                                    [dummy_vec],
+                                    [new_username],
+                                    [enc_pwd],
+                                    [enc_token],
+                                    [enc_uri]
+                                ]
+                                auth_col.insert(insert_data)
+                                auth_col.flush()
+                                st.success("Account created! Please login.")
+                                time.sleep(1)
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Signup error: {e}")
+                else:
+                    st.error("Please fill in all fields")
+        
+        st.markdown("---")
+        st.markdown("**Supported LLMs:**")
+        st.markdown("- Qwen 3.5 122B")
+        st.markdown("- Gemini Pro")
+        st.markdown("- Llama-4-Scout")
+        st.markdown("- Gemini Flash Lite")
         st.stop()
 
 if prompt or (st.session_state.get("pending_prompt") and st.session_state.get("logged_in", False)):
@@ -478,63 +645,51 @@ if prompt or (st.session_state.get("pending_prompt") and st.session_state.get("l
         with st.status("Processing Query...", expanded=True) as status:
             try:
                 pipeline_start = time.time()
-                
-                # STEP 1: RETRIEVE CONTEXT
-                past_context = retrieve_relevant_context(actual_prompt)
+                current_username = st.session_state["username"]
+                uri, token = get_active_credentials()
+                col = init_zilliz(uri, token)
+
                 status.update(label="Retrieving memory...", state="running")
                 t_context = time.time() - pipeline_start
-                
-                # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using LLM 1 (Gemini Prompt Creator - gemini-3.1-flash-lite-preview)
+                past_context = retrieve_relevant_context(actual_prompt, USER_IDENTITY, col, client, EMBED_MODEL)
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
                 t0 = time.time()
-                raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {actual_prompt}")
+                raw_output1 = call_gemini_prompt_creator(GOOGLE_API_KEY, GEMINI_FLASH_MODEL, f"Context: {past_context}\n\nUser Entry: {actual_prompt}")
                 t1 = time.time() - t0
-                
-                # STEP 3: GENERATE OUTPUTS 2, 3, 4, and 5 concurrently using LLM 2 (Qwen 3.5 122B), LLM 3 (gemini-3.1-pro-preview), LLM 4 (Llama-4-Scout), and LLM 5 (Meta AI Web)
+
                 status.update(label="Generating strategies with LLMs concurrently...", state="running")
-                
-                def timed_call(func, arg):
+                def timed_call(func, *args):
                     start_t = time.time()
-                    res = func(arg)
+                    res = func(*args)
                     dur = time.time() - start_t
                     return res, dur
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    future_a = executor.submit(timed_call, call_qwen, raw_output1)
-                    future_b = executor.submit(timed_call, call_gemini_pro, raw_output1)
-                    future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
-                    # future_d = executor.submit(timed_call, call_meta_ai, raw_output1)
+                    future_a = executor.submit(timed_call, call_qwen, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, raw_output1)
+                    future_b = executor.submit(timed_call, call_gemini_pro, GOOGLE_API_KEY, GEMINI_PRO_MODEL, raw_output1)
+                    future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
                     
                     raw_output2, t2 = future_a.result()
                     raw_output3, tA = future_b.result()
                     raw_output4, t4 = future_c.result()
                     
-                    # Hardcode dummy outputs for testing LLM 5
-                    # raw_output2, t2 = "LLM 2 Disabled for testing.", 0.0
-                    # raw_output3, tA = "LLM 3 Disabled for testing.", 0.0
-                    # raw_output4, t4 = "LLM 4 Disabled for testing.", 0.0
-                    
                     raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
-                    # raw_output5, t5 = future_d.result()
-                
-                # STEP 5: SYNTHESIZE using gemini-3.1-flash-lite-preview
-                status.update(label="Synthesizing master output with gemini-3.1-flash-lite-preview...", state="running")
+
+                status.update(label="Synthesizing master output...", state="running")
                 t0 = time.time()
-                raw_master_output = call_gemini_flash_synthesize(raw_output1, raw_output2, raw_output3, raw_output4, raw_output5)
+                raw_master_output = call_gemini_flash_synthesize(GOOGLE_API_KEY, GEMINI_FLASH_MODEL, raw_output1, raw_output2, raw_output3, raw_output4, raw_output5)
                 t_master = time.time() - t0
-                
-                output1 = f"{raw_output1}\n\n*(⏱️ Time taken: {t1:.2f}s)*"
-                output2 = f"{raw_output2}\n\n*(⏱️ Time taken: {t2:.2f}s)*"
-                output3 = f"{raw_output3}\n\n*(⏱️ Time taken: {tA:.2f}s)*"
-                output4 = f"{raw_output4}\n\n*(⏱️ Time taken: {t4:.2f}s)*"
-                output5 = f"{raw_output5}\n\n*(⏱️ Time taken: {t5:.2f}s)*"
-                master_output = f"{raw_master_output}\n\n*(⏱️ Time taken: {t_master:.2f}s)*"
-                
-                # STEP 6: ARCHIVE ALL OUTPUTS TO ZILLIZ
+
+                output1 = f"{raw_output1}\n\n*(Time taken: {t1:.2f}s)*"
+                output2 = f"{raw_output2}\n\n*(Time taken: {t2:.2f}s)*"
+                output3 = f"{raw_output3}\n\n*(Time taken: {tA:.2f}s)*"
+                output4 = f"{raw_output4}\n\n*(Time taken: {t4:.2f}s)*"
+                output5 = f"{raw_output5}\n\n*(Time taken: {t5:.2f}s)*"
+                master_output = f"{raw_master_output}\n\n*(Time taken: {t_master:.2f}s)*"
+
                 status.update(label="Archiving to Zilliz (Generating embeddings)...", state="running")
                 t_archive_start = time.time()
-                
-                # Create embeddings for all outputs
+
                 safe_prompt = actual_prompt[:20000]
                 safe_output1 = output1[:20000] if output1 else ""
                 safe_output2 = output2[:20000] if output2 else ""
@@ -542,144 +697,63 @@ if prompt or (st.session_state.get("pending_prompt") and st.session_state.get("l
                 safe_output4 = output4[:20000] if output4 else ""
                 safe_output5 = output5[:20000] if output5 else ""
                 safe_master = master_output[:20000] if master_output else ""
-                
-                # Generate embeddings concurrently to save time
-                def get_embedding(text):
-                    if not text: return None
-                    try:
-                        return client.models.embed_content(model=EMBED_MODEL, contents=text).embeddings[0].values
-                    except Exception as e:
-                        print(f"Embedding Error: {e}")
-                        return [0.0] * 768
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
-                    f_p = executor.submit(get_embedding, safe_prompt)
-                    f_1 = executor.submit(get_embedding, safe_output1)
-                    f_2 = executor.submit(get_embedding, safe_output2)
-                    f_3 = executor.submit(get_embedding, safe_output3)
-                    f_4 = executor.submit(get_embedding, safe_output4)
-                    f_5 = executor.submit(get_embedding, safe_output5)
-                    f_m = executor.submit(get_embedding, safe_master)
-                    
-                    prompt_emb = f_p.result() or [0.0] * 768
-                    output1_emb = f_1.result()
-                    output2_emb = f_2.result()
-                    output3_emb = f_3.result()
-                    output4_emb = f_4.result()
-                    output5_emb = f_5.result()
-                    master_emb = f_m.result()
-                
-                # Insert all outputs into Zilliz
-                insert_data = [[prompt_emb], [safe_prompt], [USER_IDENTITY], ["user_prompt"]]
+                prompt_emb = get_embedding(client, EMBED_MODEL, safe_prompt)
+                output1_emb = get_embedding(client, EMBED_MODEL, safe_output1)
+                output2_emb = get_embedding(client, EMBED_MODEL, safe_output2)
+                output3_emb = get_embedding(client, EMBED_MODEL, safe_output3)
+                output4_emb = get_embedding(client, EMBED_MODEL, safe_output4)
+                output5_emb = get_embedding(client, EMBED_MODEL, safe_output5)
+                master_emb = get_embedding(client, EMBED_MODEL, safe_master)
+
+                current_username = st.session_state["username"]
+                insert_data = [[prompt_emb], [safe_prompt], [current_username], ["user_prompt"]]
                 if output1_emb:
-                    insert_data[0].append(output1_emb)
-                    insert_data[1].append(safe_output1)
-                    insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("output1_user_prompt")
+                    insert_data[0].append(output1_emb); insert_data[1].append(safe_output1); insert_data[2].append(current_username); insert_data[3].append("output1_user_prompt")
                 if output2_emb:
-                    insert_data[0].append(output2_emb)
-                    insert_data[1].append(safe_output2)
-                    insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("output2_llm_a")
+                    insert_data[0].append(output2_emb); insert_data[1].append(safe_output2); insert_data[2].append(current_username); insert_data[3].append("output2_llm_a")
                 if output3_emb:
-                    insert_data[0].append(output3_emb)
-                    insert_data[1].append(safe_output3)
-                    insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("output3_llm_b")
+                    insert_data[0].append(output3_emb); insert_data[1].append(safe_output3); insert_data[2].append(current_username); insert_data[3].append("output3_llm_b")
                 if output4_emb:
-                    insert_data[0].append(output4_emb)
-                    insert_data[1].append(safe_output4)
-                    insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("output4_llm_c")
+                    insert_data[0].append(output4_emb); insert_data[1].append(safe_output4); insert_data[2].append(current_username); insert_data[3].append("output4_llm_c")
                 if output5_emb:
-                    insert_data[0].append(output5_emb)
-                    insert_data[1].append(safe_output5)
-                    insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("output5_llm_d")
+                    insert_data[0].append(output5_emb); insert_data[1].append(safe_output5); insert_data[2].append(current_username); insert_data[3].append("output5_llm_d")
                 if master_emb:
-                    insert_data[0].append(master_emb)
-                    insert_data[1].append(safe_master)
-                    insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("master_output")
-                
-                res = collection.insert(insert_data)
-                collection.flush()
-                
+                    insert_data[0].append(master_emb); insert_data[1].append(safe_master); insert_data[2].append(current_username); insert_data[3].append("master_output")
+
+                res = store_interaction(uri, token, insert_data)
+
                 t_archive = time.time() - t_archive_start
                 pipeline_duration = time.time() - pipeline_start
-                
-                master_output = f"{master_output}\n\n*(⏱️ Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
-                
-                # Update local state
+
+                master_output = f"{master_output}\n\n*(Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
+
                 p_keys = res.primary_keys
-                
-                idx = 1
-                o1_id = o2_id = o3_id = o4_id = o5_id = m_id = None
-                if output1_emb:
-                    o1_id = p_keys[idx]
-                    idx += 1
-                if output2_emb:
-                    o2_id = p_keys[idx]
-                    idx += 1
-                if output3_emb:
-                    o3_id = p_keys[idx]
-                    idx += 1
-                if output4_emb:
-                    o4_id = p_keys[idx]
-                    idx += 1
-                if output5_emb:
-                    o5_id = p_keys[idx]
-                    idx += 1
-                if master_emb:
-                    m_id = p_keys[idx]
-                    
-                st.session_state.messages.append({
-                    "user": actual_prompt, 
-                    "u_id": p_keys[0],
-                    "output1": output1, "o1_id": o1_id,
-                    "output2": output2, "o2_id": o2_id,
-                    "output3": output3, "o3_id": o3_id,
-                    "output4": output4, "o4_id": o4_id,
-                    "output5": output5, "o5_id": o5_id,
-                    "master": master_output, "m_id": m_id,
-                    "all_ids": p_keys
-                })
-                
+
+                for idx, key in enumerate(p_keys[1:], 1):
+                    st.session_state.messages.append({
+                        "user": actual_prompt if idx == 1 else "",
+                        "u_id": p_keys[0],
+                        "output1": output1 if idx == 1 else "",
+                        "o1_id": key if idx == 1 else None,
+                        "output2": output2 if idx == 2 else "",
+                        "o2_id": key if idx == 2 else None,
+                        "output3": output3 if idx == 3 else "",
+                        "o3_id": key if idx == 3 else None,
+                        "output4": output4 if idx == 4 else "",
+                        "o4_id": key if idx == 4 else None,
+                        "output5": output5 if idx == 5 else "",
+                        "o5_id": key if idx == 5 else None,
+                        "master": master_output if idx == 6 else "",
+                        "m_id": key if idx == 6 else None,
+                        "all_ids": p_keys[:idx+1]
+                    })
+
+                st.session_state["logged_in"] = True
                 status.update(label="Analysis Complete", state="complete", expanded=False)
-                
-                # Display outputs
-                st.subheader("📊 Multi-LLM Pipeline Output")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    with st.expander("📝 Output 1: Optimized User Prompt", expanded=True):
-                        st.markdown(clean_text(output1))
-                
-                with col2:
-                    with st.expander("🤖 Output 2: LLM 2 (Qwen 3.5 122B)", expanded=True):
-                        st.markdown(clean_text(output2))
-                
-                col3, col4 = st.columns(2)
-                
-                with col3:
-                    with st.expander("⚡ Output 3: LLM 3 (gemini-3.1-pro-preview)", expanded=True):
-                        st.markdown(clean_text(output3))
-                
-                with col4:
-                    with st.expander("🚀 Output 4: LLM C (Llama-4-Scout-17B)", expanded=True):
-                        st.markdown(clean_text(output4))
-                
-                col5, col6 = st.columns(2)
-                with col5:
-                    with st.expander("🌐 Output 5: LLM 5 (Meta AI Web)", expanded=True):
-                        st.markdown(clean_text(output5))
-                        
-                st.markdown("---")
-                with st.expander("🏆 Output A: Master Synthesis (gemini-3.1-flash-lite-preview)", expanded=True):
-                    st.markdown(clean_text(master_output))
-                
-                st.rerun()
-                
             except Exception as e:
                 st.error(f"Pipeline Error: {e}")
+
+    elif st.session_state.get("pending_prompt") and st.session_state.get("logged_in", False):
+        # Re-run
+        pass
