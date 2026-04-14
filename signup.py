@@ -33,6 +33,7 @@ def show_signup_dialog():
             if existing:
                 st.error("Username already exists")
             else:
+                # Use administrative secrets for encryption, NOT session_state
                 enc_pwd = encrypt_data(new_password)
                 enc_token = encrypt_data(new_zilliz_token)
                 enc_uri = encrypt_data(new_zilliz_uri)
