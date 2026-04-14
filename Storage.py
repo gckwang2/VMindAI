@@ -5,37 +5,41 @@ def _get_encryption_key():
     """Helper to get ENCRYPTION_KEY from nested or flat secrets format."""
     secret = st.secrets.get("ENCRYPTION_KEY")
     
-    # Debug: Check what secret type we got
-    if secret is None:
-        st.error("DEBUG: ENCRYPTION_KEY is None in st.secrets")
-        return ""
-    
+    # If it is a dictionary, try to get the inner key
     if isinstance(secret, dict):
         val = secret.get("ENCRYPTION_KEY")
         if val:
             st.success("DEBUG: ENCRYPTION_KEY successfully retrieved from nested section")
             return val
         else:
-            st.error(f"DEBUG: ENCRYPTION_KEY section found, but key missing. Contents: {secret}")
+            st.error(f"DEBUG: ENCRYPTION_KEY section found, but inner key missing. Contents: {secret}")
             return ""
             
-    # Assuming it's a flat string if not a dict
-    st.success("DEBUG: ENCRYPTION_KEY successfully retrieved (flat format)")
-    return secret
+    # If secret is a string, return it directly
+    if isinstance(secret, str):
+        st.success("DEBUG: ENCRYPTION_KEY successfully retrieved (flat format)")
+        return secret
+        
+    st.error(f"DEBUG: ENCRYPTION_KEY is neither string nor dict. Type: {type(secret)}, Value: {secret}")
+    return ""
 
 def encrypt_data(data):
     from cryptography.fernet import Fernet
     key = _get_encryption_key()
     if not key:
         raise ValueError("ENCRYPTION_KEY not found in secrets")
-    # key needs to be 32 bytes base64 encoded.
-    # The provided key "-YN34Dk30pjDzL0=" looks suspicious. 
-    # Fernet keys MUST be 32 URL-safe base64-encoded bytes.
-    # I'll try to use it as is, but if it fails, the key itself is wrong.
+    
+    # Ensure key is a string and valid for Fernet
+    if isinstance(key, str):
+        key_bytes = key.encode('utf-8')
+    else:
+        # If it's something else, try converting to string first
+        key_bytes = str(key).encode('utf-8')
+
     try:
-        cipher = Fernet(key.encode())
+        cipher = Fernet(key_bytes)
     except Exception as e:
-        raise ValueError(f"Invalid Fernet key: {e}. Key must be 32-byte base64-encoded.")
+        raise ValueError(f"Invalid Fernet key: {e}. Key must be 32-byte base64-encoded. Key provided: {key}")
     return cipher.encrypt(data.encode()).decode()
 
 def decrypt_data(data):
@@ -43,10 +47,17 @@ def decrypt_data(data):
     key = _get_encryption_key()
     if not key:
         raise ValueError("ENCRYPTION_KEY not found in secrets")
+    
+    # Ensure key is a string and valid for Fernet
+    if isinstance(key, str):
+        key_bytes = key.encode('utf-8')
+    else:
+        key_bytes = str(key).encode('utf-8')
+        
     try:
-        cipher = Fernet(key.encode())
+        cipher = Fernet(key_bytes)
     except Exception as e:
-        raise ValueError(f"Invalid Fernet key: {e}. Key must be 32-byte base64-encoded.")
+        raise ValueError(f"Invalid Fernet key: {e}. Key must be 32-byte base64-encoded. Key provided: {key}")
     return cipher.decrypt(data.encode()).decode()
 
 def init_zilliz(uri, token):
