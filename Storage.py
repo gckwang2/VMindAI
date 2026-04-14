@@ -5,15 +5,27 @@ def _get_encryption_key():
     """Helper to get ENCRYPTION_KEY from nested or flat secrets format."""
     secret = st.secrets.get("ENCRYPTION_KEY")
     
-    # If it is a dictionary, try to get the inner key
-    if isinstance(secret, dict):
+    # Check if secret is an AttrDict (which behaves like a dict)
+    if hasattr(secret, 'get'):
+        # Try to get the value using the key 'ENCRYPTION_KEY' (for [ENCRYPTION_KEY])
+        # OR if it's already the key (for flat secrets)
         val = secret.get("ENCRYPTION_KEY")
         if val:
-            st.success("DEBUG: ENCRYPTION_KEY successfully retrieved from nested section")
+            st.success("DEBUG: ENCRYPTION_KEY successfully retrieved from AttrDict")
             return val
-        else:
-            st.error(f"DEBUG: ENCRYPTION_KEY section found, but inner key missing. Contents: {secret}")
-            return ""
+        
+        # If not in nested, maybe the secret IS the key?
+        # This covers cases where st.secrets.ENCRYPTION_KEY might be the value
+        # if the toml structure is weird.
+        return secret 
+    
+    # If secret is a string
+    if isinstance(secret, str):
+        st.success("DEBUG: ENCRYPTION_KEY successfully retrieved (flat string)")
+        return secret
+        
+    st.error(f"DEBUG: ENCRYPTION_KEY unknown type. Type: {type(secret)}, Value: {secret}")
+    return ""
             
     # If secret is a string, return it directly
     if isinstance(secret, str):
