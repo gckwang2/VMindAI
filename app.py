@@ -41,7 +41,7 @@ OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 
 # Google AI Studio Configuration
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
-GEMINI_FLASH_MODEL = "gemini-3-flash-preview"
+GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite-preview"
 
 # Groq Configuration
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
