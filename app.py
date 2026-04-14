@@ -415,9 +415,12 @@ if prompt := st.chat_input("Enter your query or draft..."):
     with st.chat_message("assistant"):
         with st.status("Processing Query...", expanded=True) as status:
             try:
+                pipeline_start = time.time()
+                
                 # STEP 1: RETRIEVE CONTEXT
                 past_context = retrieve_relevant_context(prompt)
                 status.update(label="Retrieving memory...", state="running")
+                t_context = time.time() - pipeline_start
                 
                 # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using LLM 1 (Gemini Prompt Creator - gemini-3.1-flash-lite-preview)
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
@@ -465,7 +468,8 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 master_output = f"{raw_master_output}\n\n*(⏱️ Time taken: {t_master:.2f}s)*"
                 
                 # STEP 6: ARCHIVE ALL OUTPUTS TO ZILLIZ
-                status.update(label="Archiving to Zilliz...", state="running")
+                status.update(label="Archiving to Zilliz (Generating embeddings)...", state="running")
+                t_archive_start = time.time()
                 
                 # Create embeddings for all outputs
                 safe_prompt = prompt[:59000]
@@ -476,23 +480,30 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 safe_output5 = output5[:59000] if output5 else ""
                 safe_master = master_output[:59000] if master_output else ""
                 
-                # Generate embeddings
-                try:
-                    prompt_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_prompt).embeddings[0].values
-                    output1_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output1).embeddings[0].values if safe_output1 else None
-                    output2_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output2).embeddings[0].values if safe_output2 else None
-                    output3_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output3).embeddings[0].values if safe_output3 else None
-                    output4_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output4).embeddings[0].values if safe_output4 else None
-                    output5_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output5).embeddings[0].values if safe_output5 else None
-                    master_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_master).embeddings[0].values if safe_master else None
-                except:
-                    prompt_emb = [0.0] * 768
-                    output1_emb = [0.0] * 768 if safe_output1 else None
-                    output2_emb = [0.0] * 768 if safe_output2 else None
-                    output3_emb = [0.0] * 768 if safe_output3 else None
-                    output4_emb = [0.0] * 768 if safe_output4 else None
-                    output5_emb = [0.0] * 768 if safe_output5 else None
-                    master_emb = [0.0] * 768 if safe_master else None
+                # Generate embeddings concurrently to save time
+                def get_embedding(text):
+                    if not text: return None
+                    try:
+                        return client.models.embed_content(model=EMBED_MODEL, contents=text).embeddings[0].values
+                    except:
+                        return None
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
+                    f_p = executor.submit(get_embedding, safe_prompt)
+                    f_1 = executor.submit(get_embedding, safe_output1)
+                    f_2 = executor.submit(get_embedding, safe_output2)
+                    f_3 = executor.submit(get_embedding, safe_output3)
+                    f_4 = executor.submit(get_embedding, safe_output4)
+                    f_5 = executor.submit(get_embedding, safe_output5)
+                    f_m = executor.submit(get_embedding, safe_master)
+                    
+                    prompt_emb = f_p.result() or [0.0] * 768
+                    output1_emb = f_1.result()
+                    output2_emb = f_2.result()
+                    output3_emb = f_3.result()
+                    output4_emb = f_4.result()
+                    output5_emb = f_5.result()
+                    master_emb = f_m.result()
                 
                 # Insert all outputs into Zilliz
                 insert_data = [[prompt_emb], [safe_prompt], [USER_IDENTITY], ["user_prompt"]]
@@ -529,6 +540,11 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 
                 res = collection.insert(insert_data)
                 collection.flush()
+                
+                t_archive = time.time() - t_archive_start
+                pipeline_duration = time.time() - pipeline_start
+                
+                master_output = f"{master_output}\n\n*(⏱️ Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
                 
                 # Update local state
                 p_keys = res.primary_keys
