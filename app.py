@@ -71,17 +71,17 @@ def show_auth_dialog():
         with tab1:
             st.button("Continue with Google", icon="🌐", use_container_width=True)
             st.markdown("<div style='text-align: center'>or</div>", unsafe_allow_html=True)
-            l_email = st.text_input("Email", key="l_email")
+            l_email = st.text_input("Email / Username", key="l_email")
             l_pwd = st.text_input("Password", type="password", key="l_pwd")
             if st.button("Login", use_container_width=True):
-                if l_email: 
+                if "passwords" in st.secrets and l_email in st.secrets["passwords"] and st.secrets["passwords"][l_email] == l_pwd:
                     st.session_state["logged_in"] = True
                     st.session_state["username"] = l_email
                     st.success("Logged in successfully!")
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("Please enter email.")
+                    st.error("Invalid username or password.")
         with tab2:
             st.button("Sign Up with Google", icon="🌐", use_container_width=True, key="su_google")
             st.markdown("<div style='text-align: center'>or</div>", unsafe_allow_html=True)
