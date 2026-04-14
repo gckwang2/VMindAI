@@ -3,12 +3,18 @@ from pymilvus import connections, Collection, utility, FieldSchema, CollectionSc
 
 def encrypt_data(data):
     from cryptography.fernet import Fernet
-    cipher = Fernet(st.secrets["ENCRYPTION_KEY"].encode())
+    key = st.secrets.get("ENCRYPTION_KEY", "")
+    if not key:
+        raise ValueError("ENCRYPTION_KEY not found in secrets")
+    cipher = Fernet(key.encode())
     return cipher.encrypt(data.encode()).decode()
 
 def decrypt_data(data):
     from cryptography.fernet import Fernet
-    cipher = Fernet(st.secrets["ENCRYPTION_KEY"].encode())
+    key = st.secrets.get("ENCRYPTION_KEY", "")
+    if not key:
+        raise ValueError("ENCRYPTION_KEY not found in secrets")
+    cipher = Fernet(key.encode())
     return cipher.decrypt(data.encode()).decode()
 
 def init_zilliz(uri, token):
@@ -39,7 +45,10 @@ def get_active_credentials():
     """Gets active Zilliz credentials from session state."""
     if st.session_state.get("user_zilliz_uri") and st.session_state.get("user_zilliz_token"):
         from cryptography.fernet import Fernet
-        cipher = Fernet(st.secrets["ENCRYPTION_KEY"])
+        key = st.secrets.get("ENCRYPTION_KEY", "")
+        if not key:
+            return None, None
+        cipher = Fernet(key)
         uri = cipher.decrypt(st.session_state["user_zilliz_uri"].encode()).decode()
         token = cipher.decrypt(st.session_state["user_zilliz_token"].encode()).decode()
         return uri, token
