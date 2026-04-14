@@ -1,9 +1,16 @@
 import streamlit as st
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
 
+def _get_encryption_key():
+    """Helper to get ENCRYPTION_KEY from nested or flat secrets format."""
+    secret = st.secrets.get("ENCRYPTION_KEY", {})
+    if isinstance(secret, dict):
+        return secret.get("ENCRYPTION_KEY", "")
+    return secret
+
 def encrypt_data(data):
     from cryptography.fernet import Fernet
-    key = st.secrets.get("ENCRYPTION_KEY", "")
+    key = _get_encryption_key()
     if not key:
         raise ValueError("ENCRYPTION_KEY not found in secrets")
     cipher = Fernet(key.encode())
@@ -11,7 +18,7 @@ def encrypt_data(data):
 
 def decrypt_data(data):
     from cryptography.fernet import Fernet
-    key = st.secrets.get("ENCRYPTION_KEY", "")
+    key = _get_encryption_key()
     if not key:
         raise ValueError("ENCRYPTION_KEY not found in secrets")
     cipher = Fernet(key.encode())
@@ -45,10 +52,10 @@ def get_active_credentials():
     """Gets active Zilliz credentials from session state."""
     if st.session_state.get("user_zilliz_uri") and st.session_state.get("user_zilliz_token"):
         from cryptography.fernet import Fernet
-        key = st.secrets.get("ENCRYPTION_KEY", "")
+        key = _get_encryption_key()
         if not key:
             return None, None
-        cipher = Fernet(key)
+        cipher = Fernet(key.encode())
         uri = cipher.decrypt(st.session_state["user_zilliz_uri"].encode()).decode()
         token = cipher.decrypt(st.session_state["user_zilliz_token"].encode()).decode()
         return uri, token
