@@ -22,7 +22,17 @@ import base64
 import json
 
 def run_chat_engine():
-    client = genai.Client(api_key=st.secrets["GOOGLE_API_KEY"])
+    # Retrieve secrets from st.session_state (populated by app.py)
+    GOOGLE_API_KEY = st.session_state.get("GOOGLE_API_KEY")
+    GEMINI_FLASH_MODEL = st.session_state.get("GEMINI_FLASH_MODEL")
+    DASHSCOPE_API_KEY = st.session_state.get("DASHSCOPE_API_KEY")
+    DASHSCOPE_MODEL = st.session_state.get("DASHSCOPE_MODEL")
+    GEMINI_PRO_MODEL = st.session_state.get("GEMINI_PRO_MODEL")
+    GROQ_API_KEY = st.session_state.get("GROQ_API_KEY")
+    GROQ_MODEL = st.session_state.get("GROQ_MODEL")
+    EMBED_MODEL = st.session_state.get("EMBED_MODEL")
+
+    client = genai.Client(api_key=GOOGLE_API_KEY)
     
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -50,8 +60,8 @@ def run_chat_engine():
                     status.update(label="Generating optimized user prompt (Output 1)...", state="running")
                     t0 = time.time()
                     raw_output1 = call_gemini_prompt_creator(
-                        st.secrets["GOOGLE_API_KEY"],
-                        st.secrets["GEMINI_FLASH_MODEL"],
+                        GOOGLE_API_KEY,
+                        GEMINI_FLASH_MODEL,
                         f"Context: {past_context}\n\nUser Entry: {actual_prompt}"
                     )
                     t1 = time.time() - t0
@@ -65,16 +75,16 @@ def run_chat_engine():
 
                     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                         future_a = executor.submit(timed_call, call_qwen,
-                                                    st.secrets["DASHSCOPE_API_KEY"],
-                                                    st.secrets["DASHSCOPE_MODEL"],
+                                                    DASHSCOPE_API_KEY,
+                                                    DASHSCOPE_MODEL,
                                                     raw_output1)
                         future_b = executor.submit(timed_call, call_gemini_pro,
-                                                    st.secrets["GOOGLE_API_KEY"],
-                                                    st.secrets["GEMINI_PRO_MODEL"],
+                                                    GOOGLE_API_KEY,
+                                                    GEMINI_PRO_MODEL,
                                                     raw_output1)
                         future_c = executor.submit(timed_call, call_groq_llm,
-                                                    st.secrets["GROQ_API_KEY"],
-                                                    st.secrets["GROQ_MODEL"],
+                                                    GROQ_API_KEY,
+                                                    GROQ_MODEL,
                                                     raw_output1)
                         raw_output2, t2 = future_a.result()
                         raw_output3, tA = future_b.result()
@@ -84,8 +94,8 @@ def run_chat_engine():
                     status.update(label="Synthesizing master output...", state="running")
                     t0 = time.time()
                     raw_master_output = call_gemini_flash_synthesize(
-                        st.secrets["GOOGLE_API_KEY"],
-                        st.secrets["GEMINI_FLASH_MODEL"],
+                        GOOGLE_API_KEY,
+                        GEMINI_FLASH_MODEL,
                         raw_output1, raw_output2, raw_output3, raw_output4, raw_output5
                     )
                     t_master = time.time() - t0
