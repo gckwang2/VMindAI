@@ -435,14 +435,20 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     return res, dur
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    future_a = executor.submit(timed_call, call_openrouter_a, raw_output1)
-                    future_b = executor.submit(timed_call, call_gemini_pro, raw_output1)
-                    future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
+                    # future_a = executor.submit(timed_call, call_openrouter_a, raw_output1)
+                    # future_b = executor.submit(timed_call, call_gemini_pro, raw_output1)
+                    # future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
                     future_d = executor.submit(timed_call, call_meta_ai, raw_output1)
                     
-                    raw_output2, t2 = future_a.result()
-                    raw_output3, tA = future_b.result()
-                    raw_output4, t4 = future_c.result()
+                    # raw_output2, t2 = future_a.result()
+                    # raw_output3, tA = future_b.result()
+                    # raw_output4, t4 = future_c.result()
+                    
+                    # Hardcode dummy outputs for testing LLM 5
+                    raw_output2, t2 = "LLM 2 Disabled for testing.", 0.0
+                    raw_output3, tA = "LLM 3 Disabled for testing.", 0.0
+                    raw_output4, t4 = "LLM 4 Disabled for testing.", 0.0
+                    
                     raw_output5, t5 = future_d.result()
                 
                 # STEP 5: SYNTHESIZE using gemini-3.1-flash-lite-preview
