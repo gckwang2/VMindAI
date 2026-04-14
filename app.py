@@ -389,7 +389,7 @@ for i, entry in enumerate(st.session_state.messages):
             
         if entry.get('master'):
             st.markdown("---")
-            st.markdown("**🏆 Master Output: Synthesis:**")
+            st.markdown("**🏆 Output A: Master Synthesis:**")
             st.markdown(clean_text(entry['master']))
         
         if st.button(f"🗑️ Delete Interaction {i+1}", key=f"del_{i}"):
@@ -557,7 +557,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                         st.markdown(clean_text(output4))
                         
                 st.markdown("---")
-                    with st.expander("🏆 Master Output: Synthesis (gemini-3.1-flash-lite-preview)", expanded=True):
+                    with st.expander("🏆 Output A: Master Synthesis (gemini-3.1-flash-lite-preview)", expanded=True):
                     st.markdown(clean_text(master_output))
                 
                 st.rerun()
