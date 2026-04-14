@@ -281,13 +281,13 @@ def call_gemini_flash_synthesize(output1, output2, output3, output4):
 Original Prompt & Context (Output 1):
 {output1}
 
-Response A (LLM A - GPT-OSS):
+Response A (LLM 2 - GPT-OSS):
 {output2}
 
 Response B (LLM 3 - Gemini Pro):
 {output3}
 
-Response C (LLM C - Llama-4-Scout):
+Response C (LLM 4 - Llama-4-Scout):
 {output4}
 
 Synthesize Response A, Response B, and Response C into a cohesive, comprehensive master output that:
