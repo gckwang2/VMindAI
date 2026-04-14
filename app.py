@@ -282,6 +282,8 @@ def show_auth_dialog():
     
     dialog_content()
 
+from ChatMain import run_chat_engine
+
 # --- 7. UI SETUP ---
 st.set_page_config(page_title="Ensemble AI System", layout="wide")
 
@@ -317,29 +319,16 @@ if st.session_state.get("logged_in"):
     current_username = st.session_state["username"]
     uri, token = get_active_credentials()
     raw_history = load_history(uri, token, current_username)
-    # ... (re-populate session_state.messages) ...
+    
     st.subheader("Consultation History")
-    # ... (Display loop) ...
 else:
     st.warning("Please log in to use the system.")
 
 # Chat input
-if prompt := st.chat_input("Enter your query or draft..."):
-    if not st.session_state.get("logged_in", False):
-        st.warning("Please log in first.")
-        st.stop()
-    from ChatMain import run_chat_engine
+run_chat_engine()
+
+from ChatMain import run_chat_engine
 
 # --- 7. UI SETUP ---
 st.set_page_config(page_title="Ensemble AI System", layout="wide")
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-    
-# --- 8. AUTHENTICATION DIALOGS & UI ... (rest of the file as before) ---
-
-# ...
-
-# Chat input
-run_chat_engine()
 
