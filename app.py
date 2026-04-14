@@ -198,10 +198,11 @@ def show_auth_dialog():
             
             if st.button("Login", use_container_width=True, key="login_btn"):
                 if login_username and login_password:
-                    try:
-                        uri = st.session_state["user_zilliz_uri"]
-                        token = st.session_state["user_zilliz_token"]
-                        auth_col = init_auth_db(uri, token)
+                        try:
+                            # Use master credentials from secrets to initialize auth DB
+                            uri = st.secrets["ZILLIZ_URI"]
+                            token = st.secrets["ZILLIZ_TOKEN"]
+                            auth_col = init_auth_db(uri, token)
                         
                         results = auth_col.query(
                             expr=f'username == "{login_username}"',
@@ -243,8 +244,9 @@ def show_auth_dialog():
                         st.error("Passwords do not match")
                     else:
                         try:
-                            uri = st.session_state["user_zilliz_uri"]
-                            token = st.session_state["user_zilliz_token"]
+                            # Use master credentials from secrets to initialize auth DB
+                            uri = st.secrets["ZILLIZ_URI"]
+                            token = st.secrets["ZILLIZ_TOKEN"]
                             auth_col = init_auth_db(uri, token)
                             
                             existing = auth_col.query(
