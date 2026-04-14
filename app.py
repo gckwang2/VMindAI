@@ -15,7 +15,6 @@ from pymilvus import connections, Collection, utility, FieldSchema, CollectionSc
 EMBED_MODEL = "text-embedding-004"
 USER_IDENTITY = "Generic_Ensemble_User"
 
-# OpenRouter Configuration
 def get_secret(key):
     try:
         val = st.secrets[key]
@@ -33,8 +32,9 @@ def get_secret(key):
     except Exception:
         return ""
 
-OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
-OPENROUTER_MODEL_A = "openai/gpt-oss-120b"
+# DashScope Configuration
+DASHSCOPE_API_KEY = get_secret("DASHSCOPE_API_KEY")
+DASHSCOPE_MODEL = "qwen-plus"
 
 # Google AI Studio Configuration
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
@@ -183,35 +183,38 @@ Return ONLY the synthesized prompt (Output1), nothing else."""
     except Exception as e:
         return f"Error calling Gemini Prompt Creator: {e}"
 
-def call_openrouter_a(prompt_text):
-    """Call LLM A (GPT-OSS-120B) from OpenRouter."""
-    if not OPENROUTER_API_KEY:
-        return "Error: OpenRouter API Key not configured."
+def call_qwen(prompt_text):
+    """Call LLM 2 (Qwen Plus) from DashScope."""
+    if not DASHSCOPE_API_KEY:
+        return "Error: DashScope API Key not configured."
     
-    url = "https://openrouter.ai/api/v1/chat/completions"
-    
-    payload = {
-        "model": OPENROUTER_MODEL_A,
-        "messages": [
-            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
-            {"role": "user", "content": prompt_text}
-        ]
-    }
+    url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
     
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://vmindai.streamlit.app",
-        "X-Title": "VMindAI Ensemble System"
+        "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": DASHSCOPE_MODEL,
+        "input": {
+            "messages": [
+                {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
+                {"role": "user", "content": prompt_text}
+            ]
+        },
+        "parameters": {
+            "result_format": "message"
+        }
     }
     
     try:
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+        return data.get("output", {}).get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
     except Exception as e:
-        return f"Error calling LLM A: {e}"
+        return f"Error calling Qwen: {e}"
 
 def call_gemini_pro(prompt_text):
     """Call LLM 3 (gemini-3.1-pro-preview) from Google AI Studio."""
@@ -279,7 +282,7 @@ def call_gemini_flash_synthesize(output1, output2, output3, output4, output5):
 Original Prompt & Context (Output 1):
 {output1}
 
-Response A (LLM 2 - GPT-OSS):
+Response A (LLM 2 - Qwen Plus):
 {output2}
 
 Response B (LLM 3 - Gemini Pro):
@@ -379,7 +382,7 @@ for i, entry in enumerate(st.session_state.messages):
             
         if entry.get('output2'):
             st.markdown("---")
-            st.markdown("**🤖 Output 2: LLM A (GPT-OSS-120B):**")
+            st.markdown("**🤖 Output 2: LLM 2 (Qwen Plus):**")
             st.markdown(clean_text(entry['output2']))
             
         if entry.get('output3'):
@@ -425,7 +428,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 t1 = time.time() - t0
                 
-                # STEP 3: GENERATE OUTPUTS 2, 3, 4, and 5 concurrently using LLM 2 (GPT-OSS-120B), LLM 3 (gemini-3.1-pro-preview), LLM 4 (Llama-4-Scout), and LLM 5 (Meta AI Web)
+                # STEP 3: GENERATE OUTPUTS 2, 3, 4, and 5 concurrently using LLM 2 (Qwen Plus), LLM 3 (gemini-3.1-pro-preview), LLM 4 (Llama-4-Scout), and LLM 5 (Meta AI Web)
                 status.update(label="Generating strategies with LLMs concurrently...", state="running")
                 
                 def timed_call(func, arg):
@@ -435,21 +438,22 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     return res, dur
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    # future_a = executor.submit(timed_call, call_openrouter_a, raw_output1)
-                    # future_b = executor.submit(timed_call, call_gemini_pro, raw_output1)
-                    # future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
-                    future_d = executor.submit(timed_call, call_meta_ai, raw_output1)
+                    future_a = executor.submit(timed_call, call_qwen, raw_output1)
+                    future_b = executor.submit(timed_call, call_gemini_pro, raw_output1)
+                    future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
+                    # future_d = executor.submit(timed_call, call_meta_ai, raw_output1)
                     
-                    # raw_output2, t2 = future_a.result()
-                    # raw_output3, tA = future_b.result()
-                    # raw_output4, t4 = future_c.result()
+                    raw_output2, t2 = future_a.result()
+                    raw_output3, tA = future_b.result()
+                    raw_output4, t4 = future_c.result()
                     
                     # Hardcode dummy outputs for testing LLM 5
-                    raw_output2, t2 = "LLM 2 Disabled for testing.", 0.0
-                    raw_output3, tA = "LLM 3 Disabled for testing.", 0.0
-                    raw_output4, t4 = "LLM 4 Disabled for testing.", 0.0
+                    # raw_output2, t2 = "LLM 2 Disabled for testing.", 0.0
+                    # raw_output3, tA = "LLM 3 Disabled for testing.", 0.0
+                    # raw_output4, t4 = "LLM 4 Disabled for testing.", 0.0
                     
-                    raw_output5, t5 = future_d.result()
+                    raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
+                    # raw_output5, t5 = future_d.result()
                 
                 # STEP 5: SYNTHESIZE using gemini-3.1-flash-lite-preview
                 status.update(label="Synthesizing master output with gemini-3.1-flash-lite-preview...", state="running")
@@ -590,7 +594,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                         st.markdown(clean_text(output1))
                 
                 with col2:
-                    with st.expander("🤖 Output 2: LLM A (GPT-OSS-120B)", expanded=True):
+                    with st.expander("🤖 Output 2: LLM 2 (Qwen Plus)", expanded=True):
                         st.markdown(clean_text(output2))
                 
                 col3, col4 = st.columns(2)
