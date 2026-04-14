@@ -484,8 +484,9 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     if not text: return None
                     try:
                         return client.models.embed_content(model=EMBED_MODEL, contents=text).embeddings[0].values
-                    except:
-                        return None
+                    except Exception as e:
+                        print(f"Embedding Error: {e}")
+                        return [0.0] * 768
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
                     f_p = executor.submit(get_embedding, safe_prompt)
