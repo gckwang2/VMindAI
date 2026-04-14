@@ -12,9 +12,6 @@ from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
 
 # --- 1. CONFIG & IDENTITY ---
-PROJECT_ID = st.secrets["PROJECT_ID"]
-LOCATION = "global"
-GEMINI_MODEL = "gemini-3.1-pro-preview"
 EMBED_MODEL = "text-embedding-004"
 USER_IDENTITY = "Generic_Ensemble_User"
 
@@ -409,7 +406,7 @@ for i, entry in enumerate(st.session_state.messages):
             delete_interaction(entry["all_ids"], i)
 
 # --- 9. CHAT ENGINE (MULTI-LLM PIPELINE) ---
-client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
 if prompt := st.chat_input("Enter your query or draft..."):
     with st.chat_message("assistant"):
