@@ -188,7 +188,8 @@ def call_qwen(prompt_text):
     if not DASHSCOPE_API_KEY:
         return "Error: DashScope API Key not configured."
     
-    url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text-generation/generation"
+    # Use the OpenAI compatible endpoint for DashScope
+    url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {DASHSCOPE_API_KEY}",
@@ -197,22 +198,19 @@ def call_qwen(prompt_text):
     
     payload = {
         "model": DASHSCOPE_MODEL,
-        "input": {
-            "messages": [
-                {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
-                {"role": "user", "content": prompt_text}
-            ]
-        },
-        "parameters": {
-            "result_format": "message"
-        }
+        "messages": [
+            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
+            {"role": "user", "content": prompt_text}
+        ]
     }
     
     try:
         response = requests.post(url, json=payload, headers=headers)
+        if response.status_code != 200:
+            return f"Error calling Qwen (Status {response.status_code}): {response.text}"
         response.raise_for_status()
         data = response.json()
-        return data.get("output", {}).get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
     except Exception as e:
         return f"Error calling Qwen: {e}"
 
