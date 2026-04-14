@@ -20,10 +20,13 @@ from Storage import (
     store_interaction,
     delete_interaction,
     get_active_credentials,
-    init_zilliz
+    init_zilliz,
+    encrypt_data,
+    decrypt_data
 )
 from google import genai
 from google.genai import types
+from ChatMain import run_chat_engine
 
 # --- 1. CONFIG & IDENTITY ---
 EMBED_MODEL = "text-embedding-004"
@@ -282,13 +285,20 @@ def show_auth_dialog():
     
     dialog_content()
 
-from ChatMain import run_chat_engine
+# Chat input
+run_chat_engine()
 
 # --- 7. UI SETUP ---
 st.set_page_config(page_title="Ensemble AI System", layout="wide")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "user_zilliz_uri" not in st.session_state:
+    st.session_state.user_zilliz_uri = ""
+if "user_zilliz_token" not in st.session_state:
+    st.session_state.user_zilliz_token = ""
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
 # Sidebar
 with st.sidebar:
@@ -326,9 +336,4 @@ else:
 
 # Chat input
 run_chat_engine()
-
-from ChatMain import run_chat_engine
-
-# --- 7. UI SETUP ---
-st.set_page_config(page_title="Ensemble AI System", layout="wide")
 
