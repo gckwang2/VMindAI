@@ -6,6 +6,7 @@ import requests
 import concurrent.futures
 import time
 import datetime
+from MetaLlama4 import call_meta_ai
 from google import genai
 from google.genai import types
 from pymilvus import connections, Collection, utility, FieldSchema, CollectionSchema, DataType
@@ -269,14 +270,14 @@ def call_groq_llm(prompt_text):
     except Exception as e:
         return f"Error calling Groq: {e}"
 
-def call_gemini_flash_synthesize(output1, output2, output3, output4):
+def call_gemini_flash_synthesize(output1, output2, output3, output4, output5):
     """Call gemini-3.1-flash-lite-preview to synthesize outputs into master output."""
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_FLASH_MODEL}:generateContent?key={GOOGLE_API_KEY}"
     
-    prompt_text = f"""You are an Expert Editor. Your task is to synthesize three AI responses into one master response, based on the original context and prompt.
+    prompt_text = f"""You are an Expert Editor. Your task is to synthesize four AI responses into one master response, based on the original context and prompt.
 
 Original Prompt & Context (Output 1):
 {output1}
@@ -290,7 +291,10 @@ Response B (LLM 3 - Gemini Pro):
 Response C (LLM 4 - Llama-4-Scout):
 {output4}
 
-Synthesize Response A, Response B, and Response C into a cohesive, comprehensive master output that:
+Response D (LLM 5 - Meta AI Web):
+{output5}
+
+Synthesize Response A, Response B, Response C, and Response D into a cohesive, comprehensive master output that:
 1. Integrates the strongest insights from all responses
 2. Resolves any contradictions
 3. Provides a unified, authoritative response
@@ -336,6 +340,7 @@ if "messages" not in st.session_state:
                 "output2": "", "o2_id": None,
                 "output3": "", "o3_id": None,
                 "output4": "", "o4_id": None,
+                "output5": "", "o5_id": None,
                 "master": "", "m_id": None,
                 "all_ids": [item['id']]
             }
@@ -353,6 +358,9 @@ if "messages" not in st.session_state:
             elif role == 'output4_llm_c':
                 current_interaction["output4"] = item['text']
                 current_interaction["o4_id"] = item['id']
+            elif role == 'output5_llm_d':
+                current_interaction["output5"] = item['text']
+                current_interaction["o5_id"] = item['id']
             elif role in ['assistant', 'master_output']:
                 current_interaction["master"] = item['text']
                 current_interaction["m_id"] = item['id']
@@ -387,6 +395,11 @@ for i, entry in enumerate(st.session_state.messages):
             st.markdown("**🚀 Output 4: LLM C (Llama-4-Scout-17B):**")
             st.markdown(clean_text(entry['output4']))
             
+        if entry.get('output5'):
+            st.markdown("---")
+            st.markdown("**🌐 Output 5: LLM 5 (Meta AI Web):**")
+            st.markdown(clean_text(entry['output5']))
+            
         if entry.get('master'):
             st.markdown("---")
             st.markdown("**🏆 Output A: Master Synthesis:**")
@@ -412,7 +425,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 t1 = time.time() - t0
                 
-                # STEP 3: GENERATE OUTPUTS 2, 3, and 4 concurrently using LLM 2 (GPT-OSS-120B), LLM 3 (gemini-3.1-pro-preview), and LLM 4 (Llama-4-Scout)
+                # STEP 3: GENERATE OUTPUTS 2, 3, 4, and 5 concurrently using LLM 2 (GPT-OSS-120B), LLM 3 (gemini-3.1-pro-preview), LLM 4 (Llama-4-Scout), and LLM 5 (Meta AI Web)
                 status.update(label="Generating strategies with LLMs concurrently...", state="running")
                 
                 def timed_call(func, arg):
@@ -421,25 +434,28 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     dur = time.time() - start_t
                     return res, dur
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                     future_a = executor.submit(timed_call, call_openrouter_a, raw_output1)
                     future_b = executor.submit(timed_call, call_gemini_pro, raw_output1)
                     future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
+                    future_d = executor.submit(timed_call, call_meta_ai, raw_output1)
                     
                     raw_output2, t2 = future_a.result()
                     raw_output3, tA = future_b.result()
                     raw_output4, t4 = future_c.result()
+                    raw_output5, t5 = future_d.result()
                 
                 # STEP 5: SYNTHESIZE using gemini-3.1-flash-lite-preview
                 status.update(label="Synthesizing master output with gemini-3.1-flash-lite-preview...", state="running")
                 t0 = time.time()
-                raw_master_output = call_gemini_flash_synthesize(raw_output1, raw_output2, raw_output3, raw_output4)
+                raw_master_output = call_gemini_flash_synthesize(raw_output1, raw_output2, raw_output3, raw_output4, raw_output5)
                 t_master = time.time() - t0
                 
                 output1 = f"{raw_output1}\n\n*(⏱️ Time taken: {t1:.2f}s)*"
                 output2 = f"{raw_output2}\n\n*(⏱️ Time taken: {t2:.2f}s)*"
                 output3 = f"{raw_output3}\n\n*(⏱️ Time taken: {tA:.2f}s)*"
                 output4 = f"{raw_output4}\n\n*(⏱️ Time taken: {t4:.2f}s)*"
+                output5 = f"{raw_output5}\n\n*(⏱️ Time taken: {t5:.2f}s)*"
                 master_output = f"{raw_master_output}\n\n*(⏱️ Time taken: {t_master:.2f}s)*"
                 
                 # STEP 6: ARCHIVE ALL OUTPUTS TO ZILLIZ
@@ -451,6 +467,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 safe_output2 = output2[:59000] if output2 else ""
                 safe_output3 = output3[:59000] if output3 else ""
                 safe_output4 = output4[:59000] if output4 else ""
+                safe_output5 = output5[:59000] if output5 else ""
                 safe_master = master_output[:59000] if master_output else ""
                 
                 # Generate embeddings
@@ -460,6 +477,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     output2_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output2).embeddings[0].values if safe_output2 else None
                     output3_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output3).embeddings[0].values if safe_output3 else None
                     output4_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output4).embeddings[0].values if safe_output4 else None
+                    output5_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output5).embeddings[0].values if safe_output5 else None
                     master_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_master).embeddings[0].values if safe_master else None
                 except:
                     prompt_emb = [0.0] * 768
@@ -467,6 +485,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     output2_emb = [0.0] * 768 if safe_output2 else None
                     output3_emb = [0.0] * 768 if safe_output3 else None
                     output4_emb = [0.0] * 768 if safe_output4 else None
+                    output5_emb = [0.0] * 768 if safe_output5 else None
                     master_emb = [0.0] * 768 if safe_master else None
                 
                 # Insert all outputs into Zilliz
@@ -491,6 +510,11 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     insert_data[1].append(safe_output4)
                     insert_data[2].append(USER_IDENTITY)
                     insert_data[3].append("output4_llm_c")
+                if output5_emb:
+                    insert_data[0].append(output5_emb)
+                    insert_data[1].append(safe_output5)
+                    insert_data[2].append(USER_IDENTITY)
+                    insert_data[3].append("output5_llm_d")
                 if master_emb:
                     insert_data[0].append(master_emb)
                     insert_data[1].append(safe_master)
@@ -504,7 +528,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 p_keys = res.primary_keys
                 
                 idx = 1
-                o1_id = o2_id = o3_id = o4_id = m_id = None
+                o1_id = o2_id = o3_id = o4_id = o5_id = m_id = None
                 if output1_emb:
                     o1_id = p_keys[idx]
                     idx += 1
@@ -517,6 +541,9 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 if output4_emb:
                     o4_id = p_keys[idx]
                     idx += 1
+                if output5_emb:
+                    o5_id = p_keys[idx]
+                    idx += 1
                 if master_emb:
                     m_id = p_keys[idx]
                     
@@ -527,6 +554,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     "output2": output2, "o2_id": o2_id,
                     "output3": output3, "o3_id": o3_id,
                     "output4": output4, "o4_id": o4_id,
+                    "output5": output5, "o5_id": o5_id,
                     "master": master_output, "m_id": m_id,
                     "all_ids": p_keys
                 })
@@ -555,6 +583,11 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 with col4:
                     with st.expander("🚀 Output 4: LLM C (Llama-4-Scout-17B)", expanded=True):
                         st.markdown(clean_text(output4))
+                
+                col5, col6 = st.columns(2)
+                with col5:
+                    with st.expander("🌐 Output 5: LLM 5 (Meta AI Web)", expanded=True):
+                        st.markdown(clean_text(output5))
                         
                 st.markdown("---")
                 with st.expander("🏆 Output A: Master Synthesis (gemini-3.1-flash-lite-preview)", expanded=True):
