@@ -11,20 +11,15 @@ def _get_encryption_key():
         # OR if it's already the key (for flat secrets)
         val = secret.get("ENCRYPTION_KEY")
         if val:
-            st.success("DEBUG: ENCRYPTION_KEY successfully retrieved from AttrDict")
             return val
         
         # If not in nested, maybe the secret IS the key?
-        # This covers cases where st.secrets.ENCRYPTION_KEY might be the value
-        # if the toml structure is weird.
         return secret 
     
     # If secret is a string
     if isinstance(secret, str):
-        st.success("DEBUG: ENCRYPTION_KEY successfully retrieved (flat string)")
         return secret
         
-    st.error(f"DEBUG: ENCRYPTION_KEY unknown type. Type: {type(secret)}, Value: {secret}")
     return ""
             
     # If secret is a string, return it directly
