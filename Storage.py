@@ -3,16 +3,15 @@ from pymilvus import connections, Collection, utility, FieldSchema, CollectionSc
 
 def _get_encryption_key():
     """Helper to get ENCRYPTION_KEY from nested or flat secrets format."""
-    # Assuming user defined [ENCRYPTION_KEY] in secrets.toml
-    # Accessing it directly might return the dict or the value.
-    # Let's inspect what st.secrets["ENCRYPTION_KEY"] returns.
     secret = st.secrets.get("ENCRYPTION_KEY")
     if isinstance(secret, dict):
-        # If it's a section [ENCRYPTION_KEY], it contains key/value pairs
-        # The user said:
-        # [ENCRYPTION_KEY]
-        # ENCRYPTION_KEY = "-YN34Dk30pjDzL0="
-        return secret.get("ENCRYPTION_KEY", "")
+        # Case: [ENCRYPTION_KEY] / ENCRYPTION_KEY = "..."
+        # If the dict contains the key as an attribute/index, try to access it.
+        # Based on the error message "st.secrets has no attribute 'encode'",
+        # it seems st.secrets.get("ENCRYPTION_KEY") might be returning 
+        # a structure where the value isn't directly accessible as expected.
+        # Let's try to access it directly if it's a dict-like object.
+        return secret.get("ENCRYPTION_KEY")
     return secret
 
 def encrypt_data(data):
