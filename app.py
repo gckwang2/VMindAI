@@ -208,25 +208,25 @@ def show_auth_dialog():
                                 expr=f'username == "{login_username}"',
                                 output_fields=["encrypted_password", "encrypted_zilliz_token", "zilliz_uri"]
                             )
-                        
-                        if results:
-                            stored_enc_pwd = results[0]["encrypted_password"]
-                            decrypted_pwd = decrypt_data(stored_enc_pwd)
                             
-                            if decrypted_pwd == login_password:
-                                st.session_state["logged_in"] = True
-                                st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
-                                st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
-                                st.session_state["username"] = login_username
-                                st.success("Login successful!")
-                                time.sleep(1)
-                                st.rerun()
+                            if results:
+                                stored_enc_pwd = results[0]["encrypted_password"]
+                                decrypted_pwd = decrypt_data(stored_enc_pwd)
+                                
+                                if decrypted_pwd == login_password:
+                                    st.session_state["logged_in"] = True
+                                    st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
+                                    st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
+                                    st.session_state["username"] = login_username
+                                    st.success("Login successful!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Invalid password")
                             else:
-                                st.error("Invalid password")
-                        else:
-                            st.error("User not found")
-                    except Exception as e:
-                        st.error(f"Login error: {e}")
+                                st.error("User not found")
+                        except Exception as e:
+                            st.error(f"Login error: {e}")
                 else:
                     st.error("Please enter username and password")
         
