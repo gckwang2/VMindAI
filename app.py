@@ -37,11 +37,11 @@ def get_secret(key):
 
 OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
 OPENROUTER_MODEL_A = "openai/gpt-oss-120b"
-OPENROUTER_MODEL_B = "nvidia/nemotron-3-super-120b-a12b"
 
 # Google AI Studio Configuration
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
 GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite-preview"
+GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
 
 # Groq Configuration
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
@@ -215,35 +215,30 @@ def call_openrouter_a(prompt_text):
     except Exception as e:
         return f"Error calling LLM A: {e}"
 
-def call_openrouter_b(prompt_text):
-    """Call LLM B (Nemotron-3-Super-120B) from OpenRouter."""
-    if not OPENROUTER_API_KEY:
-        return "Error: OpenRouter API Key not configured."
+def call_gemini_pro(prompt_text):
+    """Call LLM 3 (gemini-3.1-pro-preview) from Google AI Studio."""
+    if not GOOGLE_API_KEY:
+        return "Error: Google API Key not configured."
     
-    url = "https://openrouter.ai/api/v1/chat/completions"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_PRO_MODEL}:generateContent?key={GOOGLE_API_KEY}"
     
     payload = {
-        "model": OPENROUTER_MODEL_B,
-        "messages": [
-            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
-            {"role": "user", "content": prompt_text}
-        ]
+        "contents": [{
+            "parts": [{
+                "text": f"You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided.\n\nPrompt: {prompt_text}"
+            }]
+        }]
     }
     
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://vmindai.streamlit.app",
-        "X-Title": "VMindAI Ensemble System"
-    }
+    headers = {"Content-Type": "application/json"}
     
     try:
         response = requests.post(url, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+        return data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Error generating response.")
     except Exception as e:
-        return f"Error calling LLM B: {e}"
+        return f"Error calling Gemini Pro: {e}"
 
 def call_groq_llm(prompt_text):
     """Call Groq LLM."""
@@ -274,7 +269,7 @@ def call_groq_llm(prompt_text):
     except Exception as e:
         return f"Error calling Groq: {e}"
 
-def call_gemini_flash_synthesize(output1, output2, outputA, output4):
+def call_gemini_flash_synthesize(output1, output2, output3, output4):
     """Call gemini-3.1-flash-lite-preview to synthesize outputs into master output."""
     if not GOOGLE_API_KEY:
         return "Error: Google API Key not configured."
@@ -289,8 +284,8 @@ Original Prompt & Context (Output 1):
 Response A (LLM A - GPT-OSS):
 {output2}
 
-Response B (LLM B - Nemotron):
-{outputA}
+Response B (LLM 3 - Gemini Pro):
+{output3}
 
 Response C (LLM C - Llama-4-Scout):
 {output4}
@@ -339,7 +334,7 @@ if "messages" not in st.session_state:
                 "u_id": item['id'],
                 "output1": "", "o1_id": None,
                 "output2": "", "o2_id": None,
-                "outputA": "", "oA_id": None,
+                "output3": "", "o3_id": None,
                 "output4": "", "o4_id": None,
                 "master": "", "m_id": None,
                 "all_ids": [item['id']]
@@ -352,9 +347,9 @@ if "messages" not in st.session_state:
             elif role == 'output2_llm_a':
                 current_interaction["output2"] = item['text']
                 current_interaction["o2_id"] = item['id']
-            elif role == 'outputA_llm_b':
-                current_interaction["outputA"] = item['text']
-                current_interaction["oA_id"] = item['id']
+            elif role == 'output3_llm_b':
+                current_interaction["output3"] = item['text']
+                current_interaction["o3_id"] = item['id']
             elif role == 'output4_llm_c':
                 current_interaction["output4"] = item['text']
                 current_interaction["o4_id"] = item['id']
@@ -382,10 +377,10 @@ for i, entry in enumerate(st.session_state.messages):
             st.markdown("**🤖 Output 2: LLM A (GPT-OSS-120B):**")
             st.markdown(clean_text(entry['output2']))
             
-        if entry.get('outputA'):
+        if entry.get('output3'):
             st.markdown("---")
-            st.markdown("**⚡ Output A: LLM B (Nemotron-3-Super-120B):**")
-            st.markdown(clean_text(entry['outputA']))
+            st.markdown("**⚡ Output 3: LLM 3 (gemini-3.1-pro-preview):**")
+            st.markdown(clean_text(entry['output3']))
             
         if entry.get('output4'):
             st.markdown("---")
@@ -417,7 +412,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 t1 = time.time() - t0
                 
-                # STEP 3: GENERATE OUTPUTS 2, A, and 4 concurrently using LLM 2 (GPT-OSS-120B), LLM 3 (Nemotron-3-Super-120B), and LLM 4 (Llama-4-Scout)
+                # STEP 3: GENERATE OUTPUTS 2, 3, and 4 concurrently using LLM 2 (GPT-OSS-120B), LLM 3 (gemini-3.1-pro-preview), and LLM 4 (Llama-4-Scout)
                 status.update(label="Generating strategies with LLMs concurrently...", state="running")
                 
                 def timed_call(func, arg):
@@ -428,22 +423,22 @@ if prompt := st.chat_input("Enter your query or draft..."):
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
                     future_a = executor.submit(timed_call, call_openrouter_a, raw_output1)
-                    future_b = executor.submit(timed_call, call_openrouter_b, raw_output1)
+                    future_b = executor.submit(timed_call, call_gemini_pro, raw_output1)
                     future_c = executor.submit(timed_call, call_groq_llm, raw_output1)
                     
                     raw_output2, t2 = future_a.result()
-                    raw_outputA, tA = future_b.result()
+                    raw_output3, tA = future_b.result()
                     raw_output4, t4 = future_c.result()
                 
                 # STEP 5: SYNTHESIZE using gemini-3.1-flash-lite-preview
                 status.update(label="Synthesizing master output with gemini-3.1-flash-lite-preview...", state="running")
                 t0 = time.time()
-                raw_master_output = call_gemini_flash_synthesize(raw_output1, raw_output2, raw_outputA, raw_output4)
+                raw_master_output = call_gemini_flash_synthesize(raw_output1, raw_output2, raw_output3, raw_output4)
                 t_master = time.time() - t0
                 
                 output1 = f"{raw_output1}\n\n*(⏱️ Time taken: {t1:.2f}s)*"
                 output2 = f"{raw_output2}\n\n*(⏱️ Time taken: {t2:.2f}s)*"
-                outputA = f"{raw_outputA}\n\n*(⏱️ Time taken: {tA:.2f}s)*"
+                output3 = f"{raw_output3}\n\n*(⏱️ Time taken: {tA:.2f}s)*"
                 output4 = f"{raw_output4}\n\n*(⏱️ Time taken: {t4:.2f}s)*"
                 master_output = f"{raw_master_output}\n\n*(⏱️ Time taken: {t_master:.2f}s)*"
                 
@@ -454,7 +449,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 safe_prompt = prompt[:59000]
                 safe_output1 = output1[:59000] if output1 else ""
                 safe_output2 = output2[:59000] if output2 else ""
-                safe_outputA = outputA[:59000] if outputA else ""
+                safe_output3 = output3[:59000] if output3 else ""
                 safe_output4 = output4[:59000] if output4 else ""
                 safe_master = master_output[:59000] if master_output else ""
                 
@@ -463,14 +458,14 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     prompt_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_prompt).embeddings[0].values
                     output1_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output1).embeddings[0].values if safe_output1 else None
                     output2_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output2).embeddings[0].values if safe_output2 else None
-                    outputA_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_outputA).embeddings[0].values if safe_outputA else None
+                    output3_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output3).embeddings[0].values if safe_output3 else None
                     output4_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_output4).embeddings[0].values if safe_output4 else None
                     master_emb = client.models.embed_content(model=EMBED_MODEL, contents=safe_master).embeddings[0].values if safe_master else None
                 except:
                     prompt_emb = [0.0] * 768
                     output1_emb = [0.0] * 768 if safe_output1 else None
                     output2_emb = [0.0] * 768 if safe_output2 else None
-                    outputA_emb = [0.0] * 768 if safe_outputA else None
+                    output3_emb = [0.0] * 768 if safe_output3 else None
                     output4_emb = [0.0] * 768 if safe_output4 else None
                     master_emb = [0.0] * 768 if safe_master else None
                 
@@ -486,11 +481,11 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     insert_data[1].append(safe_output2)
                     insert_data[2].append(USER_IDENTITY)
                     insert_data[3].append("output2_llm_a")
-                if outputA_emb:
-                    insert_data[0].append(outputA_emb)
-                    insert_data[1].append(safe_outputA)
+                if output3_emb:
+                    insert_data[0].append(output3_emb)
+                    insert_data[1].append(safe_output3)
                     insert_data[2].append(USER_IDENTITY)
-                    insert_data[3].append("outputA_llm_b")
+                    insert_data[3].append("output3_llm_b")
                 if output4_emb:
                     insert_data[0].append(output4_emb)
                     insert_data[1].append(safe_output4)
@@ -509,15 +504,15 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 p_keys = res.primary_keys
                 
                 idx = 1
-                o1_id = o2_id = oA_id = o4_id = m_id = None
+                o1_id = o2_id = o3_id = o4_id = m_id = None
                 if output1_emb:
                     o1_id = p_keys[idx]
                     idx += 1
                 if output2_emb:
                     o2_id = p_keys[idx]
                     idx += 1
-                if outputA_emb:
-                    oA_id = p_keys[idx]
+                if output3_emb:
+                    o3_id = p_keys[idx]
                     idx += 1
                 if output4_emb:
                     o4_id = p_keys[idx]
@@ -530,7 +525,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     "u_id": p_keys[0],
                     "output1": output1, "o1_id": o1_id,
                     "output2": output2, "o2_id": o2_id,
-                    "outputA": outputA, "oA_id": oA_id,
+                    "output3": output3, "o3_id": o3_id,
                     "output4": output4, "o4_id": o4_id,
                     "master": master_output, "m_id": m_id,
                     "all_ids": p_keys
@@ -554,8 +549,8 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 col3, col4 = st.columns(2)
                 
                 with col3:
-                    with st.expander("⚡ Output A: LLM B (Nemotron-3-Super-120B)", expanded=True):
-                        st.markdown(clean_text(outputA))
+                    with st.expander("⚡ Output 3: LLM 3 (gemini-3.1-pro-preview)", expanded=True):
+                        st.markdown(clean_text(output3))
                 
                 with col4:
                     with st.expander("🚀 Output 4: LLM C (Llama-4-Scout-17B)", expanded=True):
