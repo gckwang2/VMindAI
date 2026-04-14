@@ -34,7 +34,7 @@ def get_secret(key):
 
 # DashScope Configuration
 DASHSCOPE_API_KEY = get_secret("DASHSCOPE_API_KEY")
-DASHSCOPE_MODEL = "qwen-plus"
+DASHSCOPE_MODEL = "qwen3.5-122b-a10b"
 
 # Google AI Studio Configuration
 GOOGLE_API_KEY = get_secret("GOOGLE_API_KEY")
@@ -184,7 +184,7 @@ Return ONLY the synthesized prompt (Output1), nothing else."""
         return f"Error calling Gemini Prompt Creator: {e}"
 
 def call_qwen(prompt_text):
-    """Call LLM 2 (Qwen Plus) from DashScope."""
+    """Call LLM 2 (Qwen 3.5 122B) from DashScope."""
     if not DASHSCOPE_API_KEY:
         return "Error: DashScope API Key not configured."
     
@@ -282,7 +282,7 @@ def call_gemini_flash_synthesize(output1, output2, output3, output4, output5):
 Original Prompt & Context (Output 1):
 {output1}
 
-Response A (LLM 2 - Qwen Plus):
+Response A (LLM 2 - Qwen 3.5 122B):
 {output2}
 
 Response B (LLM 3 - Gemini Pro):
@@ -382,7 +382,7 @@ for i, entry in enumerate(st.session_state.messages):
             
         if entry.get('output2'):
             st.markdown("---")
-            st.markdown("**🤖 Output 2: LLM 2 (Qwen Plus):**")
+            st.markdown("**🤖 Output 2: LLM 2 (Qwen 3.5 122B):**")
             st.markdown(clean_text(entry['output2']))
             
         if entry.get('output3'):
@@ -428,7 +428,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
                 t1 = time.time() - t0
                 
-                # STEP 3: GENERATE OUTPUTS 2, 3, 4, and 5 concurrently using LLM 2 (Qwen Plus), LLM 3 (gemini-3.1-pro-preview), LLM 4 (Llama-4-Scout), and LLM 5 (Meta AI Web)
+                # STEP 3: GENERATE OUTPUTS 2, 3, 4, and 5 concurrently using LLM 2 (Qwen 3.5 122B), LLM 3 (gemini-3.1-pro-preview), LLM 4 (Llama-4-Scout), and LLM 5 (Meta AI Web)
                 status.update(label="Generating strategies with LLMs concurrently...", state="running")
                 
                 def timed_call(func, arg):
@@ -594,7 +594,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                         st.markdown(clean_text(output1))
                 
                 with col2:
-                    with st.expander("🤖 Output 2: LLM 2 (Qwen Plus)", expanded=True):
+                    with st.expander("🤖 Output 2: LLM 2 (Qwen 3.5 122B)", expanded=True):
                         st.markdown(clean_text(output2))
                 
                 col3, col4 = st.columns(2)
