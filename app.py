@@ -21,6 +21,7 @@ from Storage import (
     delete_interaction,
     get_active_credentials,
     init_zilliz,
+    init_auth_db,
     encrypt_data,
     decrypt_data
 )
@@ -70,49 +71,6 @@ st.session_state["EMBED_MODEL"] = "text-embedding-004"
 
 # Google GenAI Client
 client = genai.Client(api_key=GOOGLE_API_KEY)
-
-# --- 2. ZILLIZ SETUP ---
-
-@st.cache_resource
-def init_zilliz(uri, token):
-    connections.connect(uri=uri, token=token)
-    col_name = "ensemble_memory_v1"
-    if not utility.has_collection(col_name):
-        fields = [
-            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=768),
-            FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=60000), 
-            FieldSchema(name="session_id", dtype=DataType.VARCHAR, max_length=100),
-            FieldSchema(name="role", dtype=DataType.VARCHAR, max_length=20)
-        ]
-        schema = CollectionSchema(fields)
-        col = Collection(col_name, schema)
-        col.create_index("vector", {"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 128}})
-    else:
-        col = Collection(col_name)
-    col.load()
-    return col
-
-@st.cache_resource
-def init_auth_db(uri, token):
-    connections.connect(uri=uri, token=token)
-    col_name = "user_credentials_v1"
-    if not utility.has_collection(col_name):
-        fields = [
-            FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=128),
-            FieldSchema(name="username", dtype=DataType.VARCHAR, max_length=100),
-            FieldSchema(name="encrypted_password", dtype=DataType.VARCHAR, max_length=512),
-            FieldSchema(name="encrypted_zilliz_token", dtype=DataType.VARCHAR, max_length=1024),
-            FieldSchema(name="zilliz_uri", dtype=DataType.VARCHAR, max_length=512)
-        ]
-        schema = CollectionSchema(fields)
-        col = Collection(col_name, schema)
-        col.create_index("vector", {"metric_type": "L2", "index_type": "IVF_FLAT", "params": {"nlist": 128}})
-    else:
-        col = Collection(col_name)
-    col.load()
-    return col
 
 # --- 3. UTILITY FUNCTIONS ---
 
