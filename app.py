@@ -45,33 +45,89 @@ GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
 GROQ_API_KEY = get_secret("GROQ_API_KEY")
 GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
-# --- 2. LOGIN GATE ---
-def check_password():
-    if "passwords" not in st.secrets:
-        st.error("🚨 Configuration Error: '[passwords]' section missing in Secrets.")
-        return False
-    def password_entered():
-        if (st.session_state["username"] in st.secrets["passwords"] and 
-            st.session_state["password"] == st.secrets["passwords"][st.session_state["username"]]):
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-            del st.session_state["username"]
-        else:
-            st.session_state["password_correct"] = False
-    if "password_correct" not in st.session_state:
-        st.text_input("Username", key="username")
-        st.text_input("Password", type="password", key="password")
-        st.button("Log In", on_click=password_entered)
-        return False
-    return st.session_state["password_correct"]
+# --- 2. AUTHENTICATION & SIDEBAR ---
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
 
-if not check_password():
-    st.stop()
+@st.dialog("Authentication Required")
+def show_auth_dialog():
+    if st.session_state.get("awaiting_verification", False):
+        st.write("### Verify your Email")
+        st.write(f"A 6-digit code has been sent to **{st.session_state.get('signup_email')}**.")
+        st.info("*(Demo Mode: Enter '123456' to verify)*")
+        code = st.text_input("6-Digit Code", max_chars=6)
+        if st.button("Verify & Login", use_container_width=True):
+            if code == "123456":
+                st.session_state["logged_in"] = True
+                st.session_state["username"] = st.session_state["signup_email"]
+                st.session_state["awaiting_verification"] = False
+                st.success("Successfully verified and logged in!")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("Invalid code.")
+    else:
+        tab1, tab2 = st.tabs(["Login", "Sign Up"])
+        with tab1:
+            st.button("Continue with Google", icon="🌐", use_container_width=True)
+            st.markdown("<div style='text-align: center'>or</div>", unsafe_allow_html=True)
+            l_email = st.text_input("Email", key="l_email")
+            l_pwd = st.text_input("Password", type="password", key="l_pwd")
+            if st.button("Login", use_container_width=True):
+                if l_email: 
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = l_email
+                    st.success("Logged in successfully!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Please enter email.")
+        with tab2:
+            st.button("Sign Up with Google", icon="🌐", use_container_width=True, key="su_google")
+            st.markdown("<div style='text-align: center'>or</div>", unsafe_allow_html=True)
+            s_email = st.text_input("Email", key="s_email")
+            s_pwd = st.text_input("Password", type="password", key="s_pwd")
+            s_pwd2 = st.text_input("Confirm Password", type="password", key="s_pwd2")
+            if st.button("Sign Up", use_container_width=True):
+                if s_email and s_pwd and s_pwd == s_pwd2:
+                    st.session_state["signup_email"] = s_email
+                    st.session_state["awaiting_verification"] = True
+                    st.rerun()
+                else:
+                    st.error("Please fill all fields correctly and ensure passwords match.")
+
+@st.dialog("Cloud Storage Configuration")
+def show_cloud_dialog():
+    st.write("### Connect Zilliz Vector DB")
+    st.info("**How to get your API Key:**\n1. Log into your Zilliz Cloud Console.\n2. Navigate to your cluster.\n3. Go to **Access Management** > **API Keys**.\n4. Create and copy a new key.")
+    st.warning("⚠️ **Storage Limit:** You can only store up to 5GB of data. If you require more than 5GB, please contact us at **support@vmind.ai**.")
+    
+    zilliz_key = st.text_input("Zilliz API Key", type="password", value=st.session_state.get("zilliz_api_key", ""))
+    if st.button("Save Configuration", use_container_width=True):
+        st.session_state["zilliz_api_key"] = zilliz_key
+        st.success("Cloud storage key saved for this session!")
+        time.sleep(1)
+        st.rerun()
+
+with st.sidebar:
+    st.title("⚙️ Settings")
+    if not st.session_state["logged_in"]:
+        if st.button("Login / Sign Up", use_container_width=True, type="primary"):
+            show_auth_dialog()
+    else:
+        st.success(f"Logged in as:\n**{st.session_state.get('username', 'User')}**")
+        if st.button("Logout", use_container_width=True):
+            st.session_state["logged_in"] = False
+            st.rerun()
+            
+    st.markdown("---")
+    if st.button("☁️ Connect Cloud Storage", use_container_width=True):
+        show_cloud_dialog()
 
 # --- 3. ZILLIZ & UTILS ---
 @st.cache_resource
-def init_zilliz():
-    connections.connect(uri=st.secrets["ZILLIZ_URI"], token=st.secrets["ZILLIZ_TOKEN"])
+def init_zilliz(token):
+    connections.connect(uri=st.secrets["ZILLIZ_URI"], token=token)
     col_name = "ensemble_memory_v1"
     if not utility.has_collection(col_name):
         fields = [
@@ -89,7 +145,8 @@ def init_zilliz():
     col.load()
     return col
 
-collection = init_zilliz()
+zilliz_token = st.session_state.get("zilliz_api_key") or st.secrets.get("ZILLIZ_TOKEN")
+collection = init_zilliz(zilliz_token)
 
 def clean_text(text):
     if not text: return ""
@@ -410,20 +467,27 @@ for i, entry in enumerate(st.session_state.messages):
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
 if prompt := st.chat_input("Enter your query or draft..."):
+    if not st.session_state.get("logged_in", False):
+        st.session_state["pending_prompt"] = prompt
+        show_auth_dialog()
+        st.stop()
+
+if prompt or (st.session_state.get("pending_prompt") and st.session_state.get("logged_in", False)):
+    actual_prompt = prompt if prompt else st.session_state.pop("pending_prompt")
     with st.chat_message("assistant"):
         with st.status("Processing Query...", expanded=True) as status:
             try:
                 pipeline_start = time.time()
                 
                 # STEP 1: RETRIEVE CONTEXT
-                past_context = retrieve_relevant_context(prompt)
+                past_context = retrieve_relevant_context(actual_prompt)
                 status.update(label="Retrieving memory...", state="running")
                 t_context = time.time() - pipeline_start
                 
                 # STEP 2: GENERATE OUTPUT 1 (User Prompt + Context) using LLM 1 (Gemini Prompt Creator - gemini-3.1-flash-lite-preview)
                 status.update(label="Generating optimized user prompt (Output 1)...", state="running")
                 t0 = time.time()
-                raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {prompt}")
+                raw_output1 = call_gemini_prompt_creator(f"Context: {past_context}\n\nUser Entry: {actual_prompt}")
                 t1 = time.time() - t0
                 
                 # STEP 3: GENERATE OUTPUTS 2, 3, 4, and 5 concurrently using LLM 2 (Qwen 3.5 122B), LLM 3 (gemini-3.1-pro-preview), LLM 4 (Llama-4-Scout), and LLM 5 (Meta AI Web)
@@ -471,7 +535,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 t_archive_start = time.time()
                 
                 # Create embeddings for all outputs
-                safe_prompt = prompt[:20000]
+                safe_prompt = actual_prompt[:20000]
                 safe_output1 = output1[:20000] if output1 else ""
                 safe_output2 = output2[:20000] if output2 else ""
                 safe_output3 = output3[:20000] if output3 else ""
@@ -570,7 +634,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                     m_id = p_keys[idx]
                     
                 st.session_state.messages.append({
-                    "user": prompt, 
+                    "user": actual_prompt, 
                     "u_id": p_keys[0],
                     "output1": output1, "o1_id": o1_id,
                     "output2": output2, "o2_id": o2_id,
