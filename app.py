@@ -471,13 +471,13 @@ if prompt := st.chat_input("Enter your query or draft..."):
                 t_archive_start = time.time()
                 
                 # Create embeddings for all outputs
-                safe_prompt = prompt[:59000]
-                safe_output1 = output1[:59000] if output1 else ""
-                safe_output2 = output2[:59000] if output2 else ""
-                safe_output3 = output3[:59000] if output3 else ""
-                safe_output4 = output4[:59000] if output4 else ""
-                safe_output5 = output5[:59000] if output5 else ""
-                safe_master = master_output[:59000] if master_output else ""
+                safe_prompt = prompt[:20000]
+                safe_output1 = output1[:20000] if output1 else ""
+                safe_output2 = output2[:20000] if output2 else ""
+                safe_output3 = output3[:20000] if output3 else ""
+                safe_output4 = output4[:20000] if output4 else ""
+                safe_output5 = output5[:20000] if output5 else ""
+                safe_master = master_output[:20000] if master_output else ""
                 
                 # Generate embeddings concurrently to save time
                 def get_embedding(text):
