@@ -557,7 +557,7 @@ if prompt := st.chat_input("Enter your query or draft..."):
                         st.markdown(clean_text(output4))
                         
                 st.markdown("---")
-                    with st.expander("🏆 Output A: Master Synthesis (gemini-3.1-flash-lite-preview)", expanded=True):
+                with st.expander("🏆 Output A: Master Synthesis (gemini-3.1-flash-lite-preview)", expanded=True):
                     st.markdown(clean_text(master_output))
                 
                 st.rerun()
