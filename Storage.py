@@ -4,14 +4,23 @@ from pymilvus import connections, Collection, utility, FieldSchema, CollectionSc
 def _get_encryption_key():
     """Helper to get ENCRYPTION_KEY from nested or flat secrets format."""
     secret = st.secrets.get("ENCRYPTION_KEY")
+    
+    # Debug: Check what secret type we got
+    if secret is None:
+        st.error("DEBUG: ENCRYPTION_KEY is None in st.secrets")
+        return ""
+    
     if isinstance(secret, dict):
-        # Case: [ENCRYPTION_KEY] / ENCRYPTION_KEY = "..."
-        # If the dict contains the key as an attribute/index, try to access it.
-        # Based on the error message "st.secrets has no attribute 'encode'",
-        # it seems st.secrets.get("ENCRYPTION_KEY") might be returning 
-        # a structure where the value isn't directly accessible as expected.
-        # Let's try to access it directly if it's a dict-like object.
-        return secret.get("ENCRYPTION_KEY")
+        val = secret.get("ENCRYPTION_KEY")
+        if val:
+            st.success("DEBUG: ENCRYPTION_KEY successfully retrieved from nested section")
+            return val
+        else:
+            st.error(f"DEBUG: ENCRYPTION_KEY section found, but key missing. Contents: {secret}")
+            return ""
+            
+    # Assuming it's a flat string if not a dict
+    st.success("DEBUG: ENCRYPTION_KEY successfully retrieved (flat format)")
     return secret
 
 def encrypt_data(data):
