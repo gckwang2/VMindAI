@@ -329,4 +329,18 @@ if prompt := st.chat_input("Enter your query or draft..."):
     if not st.session_state.get("logged_in", False):
         st.warning("Please log in first.")
         st.stop()
-    # ... (Run ChatMain.run_chat_engine) ...
+    from ChatMain import run_chat_engine
+
+# --- 7. UI SETUP ---
+st.set_page_config(page_title="Ensemble AI System", layout="wide")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    
+# --- 8. AUTHENTICATION DIALOGS & UI ... (rest of the file as before) ---
+
+# ...
+
+# Chat input
+run_chat_engine()
+
