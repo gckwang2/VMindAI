@@ -70,7 +70,7 @@ client = genai.Client(api_key=GOOGLE_API_KEY)
 
 # --- 2. ZILLIZ SETUP ---
 
-@st.cache_resource(clear_on_page_change=True)
+@st.cache_resource
 def init_zilliz(uri, token):
     connections.connect(uri=uri, token=token)
     col_name = "ensemble_memory_v1"
