@@ -203,11 +203,11 @@ def show_auth_dialog():
                             uri = st.secrets["ZILLIZ_URI"]
                             token = st.secrets["ZILLIZ_TOKEN"]
                             auth_col = init_auth_db(uri, token)
-                        
-                        results = auth_col.query(
-                            expr=f'username == "{login_username}"',
-                            output_fields=["encrypted_password", "encrypted_zilliz_token", "zilliz_uri"]
-                        )
+                            
+                            results = auth_col.query(
+                                expr=f'username == "{login_username}"',
+                                output_fields=["encrypted_password", "encrypted_zilliz_token", "zilliz_uri"]
+                            )
                         
                         if results:
                             stored_enc_pwd = results[0]["encrypted_password"]
