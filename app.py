@@ -287,9 +287,6 @@ def show_auth_dialog():
     
     dialog_content()
 
-# Chat input
-run_chat_engine()
-
 # --- 7. UI SETUP ---
 st.set_page_config(page_title="Ensemble AI System", layout="wide")
 
