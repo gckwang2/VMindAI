@@ -19,7 +19,6 @@ from Storage import (
     load_history,
     store_interaction,
     delete_interaction,
-    delete_interaction_wrapper,
     get_active_credentials,
     init_zilliz
 )
