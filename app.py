@@ -327,7 +327,8 @@ if st.session_state.get("logged_in"):
                 st.markdown(f"**User Prompt**: {text}")
             elif role == "master_output":
                 st.markdown(f"**Master Output**: {text}")
-            # Add other roles as needed
+            else:
+                st.markdown(f"**{role}**: {text}")
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
