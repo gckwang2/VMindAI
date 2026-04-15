@@ -154,24 +154,24 @@ def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, D
                 master_output = f"{master_output}\n\n*(Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
 
                 p_keys = res.primary_keys
-                for idx, key in enumerate(p_keys[1:], 1):
-                    st.session_state.messages.append({
-                        "user": actual_prompt if idx == 1 else "",
-                        "u_id": p_keys[0],
-                        "output1": output1 if idx == 1 else "",
-                        "o1_id": key if idx == 1 else None,
-                        "output2": output2 if idx == 2 else "",
-                        "o2_id": key if idx == 2 else None,
-                        "output3": output3 if idx == 3 else "",
-                        "o3_id": key if idx == 3 else None,
-                        "output4": output4 if idx == 4 else "",
-                        "o4_id": key if idx == 4 else None,
-                        "output5": output5 if idx == 5 else "",
-                        "o5_id": key if idx == 5 else None,
-                        "master": master_output if idx == 6 else "",
-                        "m_id": key if idx == 6 else None,
-                        "all_ids": p_keys[:idx+1]
-                    })
+                # Store as a single interaction unit
+                st.session_state.messages.append({
+                    "user": actual_prompt,
+                    "u_id": p_keys[0],
+                    "output1": output1,
+                    "o1_id": p_keys[1] if len(p_keys) > 1 else None,
+                    "output2": output2,
+                    "o2_id": p_keys[2] if len(p_keys) > 2 else None,
+                    "output3": output3,
+                    "o3_id": p_keys[3] if len(p_keys) > 3 else None,
+                    "output4": output4,
+                    "o4_id": p_keys[4] if len(p_keys) > 4 else None,
+                    "output5": output5,
+                    "o5_id": p_keys[5] if len(p_keys) > 5 else None,
+                    "master": master_output,
+                    "m_id": p_keys[6] if len(p_keys) > 6 else None,
+                    "all_ids": p_keys
+                })
 
                 status.update(label="Analysis Complete", state="complete", expanded=False)
             except Exception as e:

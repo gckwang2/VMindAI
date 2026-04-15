@@ -285,23 +285,63 @@ if st.session_state.get("logged_in"):
     raw_history = load_history(uri, token, current_username)
 
     st.subheader("Consultation History")
-    # Debug
-    # st.write(f"DEBUG: raw_history={raw_history}")
-    for msg in st.session_state.messages:
-        with st.chat_message("user"):
-            st.write(msg.get("user", ""))
-        with st.chat_message("assistant"):
-            st.write(msg.get("master", ""))
+    # Display messages stored in session state for the current session
+    for idx, msg in enumerate(st.session_state.messages):
+        with st.expander(label=f"Interaction #{idx + 1}", expanded=False):
+            # Display user prompt
+            user_text = msg.get("user", "")
+            if user_text:
+                st.markdown(f"**User Prompt**: {user_text}")
+            
+            # Display all outputs
+            if msg.get("output1"):
+                st.markdown(f"**Prompt Creator**: {msg.get('output1', '')}")
+            if msg.get("output2"):
+                st.markdown(f"**Qwen (LLM 1)**: {msg.get('output2', '')}")
+            if msg.get("output3"):
+                st.markdown(f"**Gemini Pro (LLM 2)**: {msg.get('output3', '')}")
+            if msg.get("output4"):
+                st.markdown(f"**Groq (LLM 3)**: {msg.get('output4', '')}")
+            if msg.get("master"):
+                st.markdown(f"**Master Synthesis**: {msg.get('master', '')}")
+            
+            # Delete button
+            all_ids = msg.get("all_ids", [])
+            if all_ids and st.button(f"Delete Interaction #{idx + 1}", key=f"del_{idx}"):
+                delete_interaction(uri, token, all_ids)
+                st.session_state.messages.pop(idx)
+                st.rerun()
 
-    for item in raw_history:
-        role = item.get("role", "")
-        text = item.get("text", "")
-        if role == "user_prompt":
-            with st.chat_message("user"):
-                st.write(text)
-        else: # Display all output roles as assistant response
-            with st.chat_message("assistant"):
-                st.write(f"**{role}**: {text}")
+    # Display history from Zilliz (read-only, no delete as it's already stored)
+    if raw_history:
+        st.markdown("---")
+        st.markdown("### Past Interactions (Read Only)")
+        # Group history by interaction using id or session
+        # For simplicity, just display them in a similar expander format
+        history_items = {}
+        for item in raw_history:
+            role = item.get("role", "")
+            text = item.get("text", "")
+            # Use a key based on role to group
+            if "user_prompt" in role:
+                history_items.setdefault("user", []).append(text)
+            elif "output1" in role:
+                history_items.setdefault("output1", []).append(text)
+            elif "output2" in role:
+                history_items.setdefault("output2", []).append(text)
+            elif "output3" in role:
+                history_items.setdefault("output3", []).append(text)
+            elif "output4" in role:
+                history_items.setdefault("output4", []).append(text)
+            elif "master" in role:
+                history_items.setdefault("master", []).append(text)
+        
+        for key in ["user", "output1", "output2", "output3", "output4", "master"]:
+            if key in history_items and history_items[key]:
+                label = "User Prompt" if key == "user" else ("Master Synthesis" if key == "master" else f"{key.upper()}")
+                for text in history_items[key]:
+                    with st.expander(label=label, expanded=False):
+                        st.markdown(text)
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
