@@ -278,10 +278,6 @@ with st.sidebar:
         st.info("Please login")
         if st.button("Login / Sign Up", use_container_width=True):
             show_auth_dialog()
-            
-    st.markdown("---")
-    if st.button("Configure Cloud Storage", use_container_width=True):
-        show_cloud_storage_dialog()
 
 st.title("VeraMind AI chatbot - deep thinking")
 
