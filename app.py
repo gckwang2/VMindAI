@@ -342,6 +342,7 @@ if st.session_state.get("logged_in"):
             elif "master" in role:
                 history_items.setdefault("master", []).append(text)
         
+        # Group by interaction ID if possible, for now just show all items
         for key in ["user", "output1", "output2", "output3", "output4", "master"]:
             if key in history_items and history_items[key]:
                 label = "User Prompt" if key == "user" else ("Master Synthesis" if key == "master" else f"{key.upper()}")
