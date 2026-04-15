@@ -1,6 +1,36 @@
 import requests
 import datetime
 
+def call_openrouter_llm(api_key, model, prompt_text):
+    """Call OpenRouter LLM (e.g., elephant-alpha) for Analysis."""
+    if not api_key:
+        return "Error: OpenRouter API Key not configured."
+    
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://vmindai.streamlit.app/",
+        "X-Title": "VMindAI",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "You are an expert AI assistant. Provide comprehensive analysis and a thoughtful response based on the prompt provided."},
+            {"role": "user", "content": prompt_text}
+        ]
+    }
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "Error generating response.")
+    except Exception as e:
+        return f"Error calling OpenRouter LLM: {e}"
+
 def call_gemini_prompt_creator(api_key, model, prompt_text):
     """Call gemini-3.1-flash-lite-preview from Google AI Studio to create user prompt."""
     if not api_key:
@@ -131,7 +161,7 @@ def call_gemini_flash_synthesize(api_key, model, output1, output2, output3, outp
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     
-    prompt_text = f"""You are an Expert Editor. Your task is to synthesize three AI responses into one master response, based on the original context and prompt.
+    prompt_text = f"""You are an Expert Editor. Your task is to synthesize the following AI response into one master response, based on the original context and prompt.
 
 Original Prompt & Context (Output 1):
 {output1}
@@ -139,13 +169,10 @@ Original Prompt & Context (Output 1):
 Response A (LLM 2 - Qwen 3.5 122B):
 {output2}
 
-Response B (LLM 3 - Gemini Pro):
+Response B (LLM 3 - OpenRouter Elephant Alpha):
 {output3}
 
-Response C (LLM 4 - Llama-4-Scout):
-{output4}
-
-Synthesize Response A, Response B, and Response C into a cohesive, comprehensive master output that:
+Synthesize Response A and Response B into a cohesive, comprehensive master output that:
 1. Integrates the strongest insights from all responses
 2. Resolves any contradictions
 3. Provides a unified, authoritative response

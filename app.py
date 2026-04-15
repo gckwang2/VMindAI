@@ -50,6 +50,9 @@ def get_secret(key):
         return ""
 
 # API Configurations
+OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = "openrouter/elephant-alpha"
+
 DASHSCOPE_API_KEY = get_secret("DASHSCOPE_API_KEY")
 DASHSCOPE_MODEL = "qwen3.5-122b-a10b"
 
@@ -61,6 +64,8 @@ GROQ_API_KEY = get_secret("GROQ_API_KEY")
 GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # Store in session state for access in other modules
+st.session_state["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
+st.session_state["OPENROUTER_MODEL"] = OPENROUTER_MODEL
 st.session_state["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 st.session_state["DASHSCOPE_API_KEY"] = DASHSCOPE_API_KEY
 st.session_state["DASHSCOPE_MODEL"] = DASHSCOPE_MODEL
@@ -341,9 +346,9 @@ if st.session_state.get("logged_in"):
                 elif role == "output2_llm_a":
                     st.markdown(f"**Qwen (LLM 1)**: {text}")
                 elif role == "output3_llm_b":
-                    st.markdown(f"**Gemini Pro (LLM 2)**: {text}")
+                    st.markdown(f"**OpenRouter Elephant (LLM 2)**: {text}")
                 elif role == "output4_llm_c":
-                    st.markdown(f"**Groq (LLM 3)**: {text}")
+                    st.markdown(f"**Groq (LLM 3) Disabled**: {text}")
                 elif role == "output5_llm_d":
                     st.markdown(f"**LLM 5 Disabled**: {text}")
                 else:

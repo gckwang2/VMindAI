@@ -5,6 +5,7 @@ from LLMLogic import (
     call_qwen,
     call_gemini_pro,
     call_groq_llm,
+    call_openrouter_llm,
     call_gemini_flash_synthesize
 )
 from Storage import (
@@ -30,6 +31,8 @@ def run_chat_engine():
     GEMINI_PRO_MODEL = st.session_state.get("GEMINI_PRO_MODEL")
     GROQ_API_KEY = st.session_state.get("GROQ_API_KEY")
     GROQ_MODEL = st.session_state.get("GROQ_MODEL")
+    OPENROUTER_API_KEY = st.session_state.get("OPENROUTER_API_KEY")
+    OPENROUTER_MODEL = st.session_state.get("OPENROUTER_MODEL")
     EMBED_MODEL = st.session_state.get("EMBED_MODEL")
 
     client = genai.Client(api_key=GOOGLE_API_KEY)
@@ -48,16 +51,16 @@ def run_chat_engine():
             st.rerun()
         else:
             # Process the prompt if logged in
-            _process_prompt(prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
+            _process_prompt(prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL, EMBED_MODEL)
 
     # Check if we have a pending prompt from before login (after successful login)
     if st.session_state.get("logged_in") and st.session_state.get("pending_prompt"):
         actual_prompt = st.session_state.pop("pending_prompt")
         # Only process if we haven't already processed this exact prompt in this session
         if not any(msg.get("user") == actual_prompt for msg in st.session_state.messages):
-            _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
+            _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL, EMBED_MODEL)
 
-def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL):
+def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL, EMBED_MODEL):
     """Helper to process the actual prompt."""
     # Display user prompt immediately in chat
     with st.chat_message("user"):
@@ -95,11 +98,12 @@ def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, D
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
                 future_a = executor.submit(timed_call, call_qwen, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, raw_output1)
-                future_b = executor.submit(timed_call, call_gemini_pro, GOOGLE_API_KEY, GEMINI_PRO_MODEL, raw_output1)
-                future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
+                future_b = executor.submit(timed_call, call_openrouter_llm, OPENROUTER_API_KEY, OPENROUTER_MODEL, raw_output1)
+                # future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
+                
                 raw_output2, t2 = future_a.result()
                 raw_output3, tA = future_b.result()
-                raw_output4, t4 = future_c.result()
+                raw_output4, t4 = "LLM 3 Disabled for testing.", 0.0
                 raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
 
             status.update(label="Synthesizing master output...", state="running")
