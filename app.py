@@ -173,6 +173,8 @@ def show_auth_dialog():
                                 st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
                                 st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
                                 st.session_state["username"] = login_username
+                                # Explicitly hide the dialog and rerun
+                                st.session_state["show_auth_dialog"] = False
                                 st.rerun()
                             else:
                                 st.error("Invalid password")
@@ -283,21 +285,23 @@ if st.session_state.get("logged_in"):
     raw_history = load_history(uri, token, current_username)
 
     st.subheader("Consultation History")
-    # Display messages stored in session state for the current session
+    # Debug
+    # st.write(f"DEBUG: raw_history={raw_history}")
     for msg in st.session_state.messages:
         with st.chat_message("user"):
             st.write(msg.get("user", ""))
         with st.chat_message("assistant"):
             st.write(msg.get("master", ""))
 
-    # Display history from Zilliz
     for item in raw_history:
-        if item["role"] == "user_prompt":
+        role = item.get("role", "")
+        text = item.get("text", "")
+        if role == "user_prompt":
             with st.chat_message("user"):
-                st.write(item["text"])
-        elif item["role"] == "master_output":
+                st.write(text)
+        else: # Display all output roles as assistant response
             with st.chat_message("assistant"):
-                st.write(item["text"])
+                st.write(f"**{role}**: {text}")
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
