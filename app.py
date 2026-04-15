@@ -264,7 +264,7 @@ if "logged_in" not in st.session_state:
 
 # Sidebar
 with st.sidebar:
-    st.title("Ensemble AI System")
+    st.title("VeraMind AI")
     if st.session_state.get("logged_in"):
         st.success(f"Logged in as: {st.session_state.get('username', 'User')}")
         if st.button("Logout", use_container_width=True):
@@ -283,7 +283,7 @@ with st.sidebar:
     if st.button("Configure Cloud Storage", use_container_width=True):
         show_cloud_storage_dialog()
 
-st.title("Multi-LLM Ensemble System")
+st.title("VeraMind AI chatbot - deep thinking")
 
 # History & Chat Engine
 if st.session_state.get("logged_in"):
