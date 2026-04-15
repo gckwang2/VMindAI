@@ -369,7 +369,14 @@ if st.session_state.get("logged_in"):
                     try:
                         # Delete all entries for this interaction from Zilliz
                         delete_interaction(uri, token, interaction_ids)
+                        
+                        # We must clear the @st.cache_data cache for load_history if it was cached.
+                        # Wait, load_history is not cached currently, but the ui isn't updating because 
+                        # the loop iterates over `interactions` which is built before deletion.
+                        # We must st.rerun() to refetch history from DB.
+                        
                         st.success("Interaction deleted from database!")
+                        time.sleep(0.5) # Give DB time to reflect deletion before rerun
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error deleting interaction: {e}")
