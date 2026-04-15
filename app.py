@@ -149,6 +149,57 @@ def show_cloud_storage_dialog():
     
     dialog_content()
 
+def show_subscription_dialog():
+    """Show subscription plans dialog."""
+    @st.dialog("Subscription Plans")
+    def dialog_content():
+        st.markdown("### VeraMind AI Subscription Plans")
+        st.markdown("Choose a plan that best suits your needs.")
+        st.markdown("---")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown("#### Free")
+            st.markdown("**$0/month**")
+            st.markdown("- Limited queries per day")
+            st.markdown("- Basic features")
+            st.markdown("- Standard response time")
+            if st.button("Select Free", key="sub_free", use_container_width=True):
+                st.info("You are already on the Free plan!")
+                time.sleep(1.5)
+                st.rerun()
+
+        with col2:
+            st.markdown("#### Pro")
+            st.markdown("**$20/month**")
+            st.markdown("- Unlimited queries")
+            st.markdown("- Priority response time")
+            st.markdown("- Advanced features")
+            st.markdown("- Email support")
+            if st.button("Select Pro", key="sub_pro", use_container_width=True):
+                st.success("Pro plan selected! This feature is coming soon.")
+                time.sleep(1.5)
+                st.rerun()
+
+        with col3:
+            st.markdown("#### Enterprise")
+            st.markdown("**$100/month**")
+            st.markdown("- Everything in Pro")
+            st.markdown("- API access")
+            st.markdown("- Dedicated support")
+            st.markdown("- Custom integrations")
+            if st.button("Select Enterprise", key="sub_ent", use_container_width=True):
+                st.success("Enterprise plan selected! This feature is coming soon.")
+                time.sleep(1.5)
+                st.rerun()
+
+        st.markdown("---")
+        if st.button("Close", use_container_width=True):
+            st.rerun()
+
+    dialog_content()
+
 def show_auth_dialog():
     """Show login/signup dialog."""
     @st.dialog("Authentication Required")
@@ -278,6 +329,10 @@ with st.sidebar:
         st.info("Please login")
         if st.button("Login / Sign Up", use_container_width=True):
             show_auth_dialog()
+
+    st.markdown("---")
+    if st.button("Subscription", use_container_width=True):
+        show_subscription_dialog()
 
 st.title("VeraMind AI chatbot - deep thinking")
 
