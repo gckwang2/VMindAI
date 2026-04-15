@@ -98,7 +98,13 @@ def get_active_credentials():
         key = _get_encryption_key()
         if not key:
             return None, None
-        cipher = Fernet(key.encode())
+            
+        if isinstance(key, str):
+            key_bytes = key.encode('utf-8')
+        else:
+            key_bytes = str(key).encode('utf-8')
+            
+        cipher = Fernet(key_bytes)
         uri = cipher.decrypt(st.session_state["user_zilliz_uri"].encode()).decode()
         token = cipher.decrypt(st.session_state["user_zilliz_token"].encode()).decode()
         return uri, token
