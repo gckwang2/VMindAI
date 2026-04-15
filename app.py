@@ -319,16 +319,23 @@ if st.session_state.get("logged_in"):
     if raw_history:
         st.markdown("---")
         st.markdown("### Past Interactions (Read Only)")
-        # Display past interactions from Zilliz
-        for item in raw_history:
+        # Display past interactions from Zilliz in windows with delete buttons
+        for idx, item in enumerate(raw_history):
             role = item.get("role", "")
             text = item.get("text", "")
-            if role == "user_prompt":
-                st.markdown(f"**User Prompt**: {text}")
-            elif role == "master_output":
-                st.markdown(f"**Master Output**: {text}")
-            else:
-                st.markdown(f"**{role}**: {text}")
+            with st.expander(label=f"Past Interaction #{idx + 1}", expanded=False):
+                if role == "user_prompt":
+                    st.markdown(f"**User Prompt**: {text}")
+                elif role == "master_output":
+                    st.markdown(f"**Master Output**: {text}")
+                else:
+                    st.markdown(f"**{role}**: {text}")
+                
+                # Add delete button for past interactions
+                if st.button(f"Delete Past Interaction #{idx + 1}"):
+                    # We can't actually delete from Zilliz for past interactions
+                    # since they're read-only, but we can hide them
+                    st.info("Past interactions are read-only and cannot be deleted.")
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
