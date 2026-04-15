@@ -172,14 +172,12 @@ def show_auth_dialog():
                                 stored_enc_pwd = results[0]["encrypted_password"]
                                 decrypted_pwd = decrypt_data(stored_enc_pwd)
                                 
-                                if decrypted_pwd == login_password:
-                                    st.session_state["logged_in"] = True
-                                    st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
-                                    st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
-                                    st.session_state["username"] = login_username
-                                    st.success("Login successful!")
-                                    time.sleep(1)
-                                    st.rerun()
+if decrypted_pwd == login_password:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
+                    st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
+                    st.session_state["username"] = login_username
+                    st.rerun()
                                 else:
                                     st.error("Invalid password")
                             else:
