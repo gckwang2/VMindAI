@@ -2,7 +2,6 @@ import time
 import concurrent.futures
 from LLMLogic import (
     call_gemini_prompt_creator,
-    call_openrouter_llm,
     call_qwen,
     call_gemini_pro,
     call_groq_llm,
@@ -31,8 +30,6 @@ def run_chat_engine():
     GEMINI_PRO_MODEL = st.session_state.get("GEMINI_PRO_MODEL")
     GROQ_API_KEY = st.session_state.get("GROQ_API_KEY")
     GROQ_MODEL = st.session_state.get("GROQ_MODEL")
-    OPENROUTER_API_KEY = st.session_state.get("OPENROUTER_API_KEY")
-    OPENROUTER_MODEL = st.session_state.get("OPENROUTER_MODEL")
     EMBED_MODEL = st.session_state.get("EMBED_MODEL")
 
     client = genai.Client(api_key=GOOGLE_API_KEY)
@@ -50,8 +47,8 @@ def run_chat_engine():
             st.session_state.show_auth_dialog = True
             st.rerun()
         else:
-        # Process the prompt if logged in
-        _process_prompt(prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, OPENROUTER_API_KEY, OPENROUTER_MODEL, EMBED_MODEL)
+            # Process the prompt if logged in
+            _process_prompt(prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
 
     # Check if we have a pending prompt from before login (after successful login)
     if st.session_state.get("logged_in") and st.session_state.get("pending_prompt"):
@@ -89,24 +86,21 @@ def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, D
             )
             t1 = time.time() - t0
 
-    status.update(label="Generating strategies with LLMs concurrently...", state="running")
-    def timed_call(func, *args):
-        start_t = time.time()
-        res = func(*args)
-        dur = time.time() - start_t
-        return res, dur
+            status.update(label="Generating strategies with LLMs concurrently...", state="running")
+            def timed_call(func, *args):
+                start_t = time.time()
+                res = func(*args)
+                dur = time.time() - start_t
+                return res, dur
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        # LLM 2 (Qwen) replaced by OpenRouter Elephant
-        # LLM 3 (Gemini Pro) disabled for now
-        future_a = executor.submit(timed_call, call_openrouter_llm, OPENROUTER_API_KEY, OPENROUTER_MODEL, raw_output1)
-        # future_b = executor.submit(timed_call, call_gemini_pro, GOOGLE_API_KEY, GEMINI_PRO_MODEL, raw_output1) # Disabled
-        future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
-        
-        raw_output2, t2 = future_a.result()
-        raw_output3, tA = "LLM 3 Disabled for testing.", 0.0
-        raw_output4, t4 = future_c.result()
-        raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                future_a = executor.submit(timed_call, call_qwen, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, raw_output1)
+                future_b = executor.submit(timed_call, call_gemini_pro, GOOGLE_API_KEY, GEMINI_PRO_MODEL, raw_output1)
+                future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
+                raw_output2, t2 = future_a.result()
+                raw_output3, tA = future_b.result()
+                raw_output4, t4 = future_c.result()
+                raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
 
             status.update(label="Synthesizing master output...", state="running")
             t0 = time.time()

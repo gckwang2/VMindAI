@@ -50,9 +50,6 @@ def get_secret(key):
         return ""
 
 # API Configurations
-OPENROUTER_API_KEY = get_secret("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = "openrouter/elephant-alpha"
-
 DASHSCOPE_API_KEY = get_secret("DASHSCOPE_API_KEY")
 DASHSCOPE_MODEL = "qwen3.5-122b-a10b"
 
@@ -64,11 +61,14 @@ GROQ_API_KEY = get_secret("GROQ_API_KEY")
 GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # Store in session state for access in other modules
-st.session_state["OPENROUTER_API_KEY"] = OPENROUTER_API_KEY
-st.session_state["OPENROUTER_MODEL"] = OPENROUTER_MODEL
+st.session_state["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 st.session_state["DASHSCOPE_API_KEY"] = DASHSCOPE_API_KEY
 st.session_state["DASHSCOPE_MODEL"] = DASHSCOPE_MODEL
-st.session_state["GOOGLE_API_KEY"] = GOOGLE_API_KEY
+st.session_state["GEMINI_FLASH_MODEL"] = GEMINI_FLASH_MODEL
+st.session_state["GEMINI_PRO_MODEL"] = GEMINI_PRO_MODEL
+st.session_state["GROQ_API_KEY"] = GROQ_API_KEY
+st.session_state["GROQ_MODEL"] = GROQ_MODEL
+st.session_state["EMBED_MODEL"] = EMBED_MODEL
 
 # Google GenAI Client
 client = genai.Client(api_key=GOOGLE_API_KEY)
