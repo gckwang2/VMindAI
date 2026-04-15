@@ -289,15 +289,11 @@ if st.session_state.get("logged_in"):
     raw_history = load_history(uri, token, current_username)
 
     st.subheader("Consultation History")
-else:
-    st.warning("Please log in to use the system.")
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
     st.session_state.pop("show_auth_dialog", None)
     show_auth_dialog()
-    # Don't run chat engine if we're showing the auth dialog
-    st.stop()
 
 # Chat input
 run_chat_engine()

@@ -38,19 +38,22 @@ def run_chat_engine():
         st.session_state.messages = []
         st.session_state.pending_prompt = None
 
-    # If not logged in, show message and don't show chat input
-    if not st.session_state.get("logged_in", False):
-        st.info("Please log in to start a conversation.")
-        return
+    # Show chat input for everyone
+    if prompt := st.chat_input("Enter your query or draft...", key="main_chat_input"):
+        # Check if logged in
+        if not st.session_state.get("logged_in", False):
+            # Store prompt and trigger auth dialog
+            st.session_state.pending_prompt = prompt
+            st.session_state.show_auth_dialog = True
+            st.rerun()
+        else:
+            # Process the prompt if logged in
+            _process_prompt(prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
 
-    # Check if we have a pending prompt from before login
-    if st.session_state.get("pending_prompt"):
+    # Check if we have a pending prompt from before login (after successful login)
+    if st.session_state.get("logged_in") and st.session_state.get("pending_prompt"):
         actual_prompt = st.session_state.pop("pending_prompt")
         _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
-        return
-
-    if prompt := st.chat_input("Enter your query or draft...", key="main_chat_input"):
-        _process_prompt(prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
 
 def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL):
     """Helper to process the actual prompt."""
