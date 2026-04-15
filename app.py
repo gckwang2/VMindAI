@@ -156,34 +156,34 @@ def show_auth_dialog():
             login_password = st.text_input("Password", type="password", key="login_password")
             
 if st.button("Login", use_container_width=True, key="login_btn"):
-            if login_username and login_password:
-                try:
-                    uri = st.secrets["ZILLIZ_URI"]
-                    token = st.secrets["ZILLIZ_TOKEN"]
-                    auth_col = init_auth_db(uri, token)
-                    results = auth_col.query(
-                        expr=f'username == "{login_username}"',
-                        output_fields=["encrypted_password", "encrypted_zilliz_token", "zilliz_uri"]
-                    )
-                    if results:
-                        stored_enc_pwd = results[0]["encrypted_password"]
-                        decrypted_pwd = decrypt_data(stored_enc_pwd)
-                        if decrypted_pwd == login_password:
-                            st.session_state["logged_in"] = True
-                            st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
-                            st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
-                            st.session_state["username"] = login_username
-                            st.rerun()
+                if login_username and login_password:
+                    try:
+                        uri = st.secrets["ZILLIZ_URI"]
+                        token = st.secrets["ZILLIZ_TOKEN"]
+                        auth_col = init_auth_db(uri, token)
+                        results = auth_col.query(
+                            expr=f'username == "{login_username}"',
+                            output_fields=["encrypted_password", "encrypted_zilliz_token", "zilliz_uri"]
+                        )
+                        if results:
+                            stored_enc_pwd = results[0]["encrypted_password"]
+                            decrypted_pwd = decrypt_data(stored_enc_pwd)
+                            if decrypted_pwd == login_password:
+                                st.session_state["logged_in"] = True
+                                st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
+                                st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
+                                st.session_state["username"] = login_username
+                                st.rerun()
+                            else:
+                                st.error("Invalid password")
                         else:
-                            st.error("Invalid password")
-                    else:
-                        st.error("User not found")
-                except Exception as e:
-                    st.error(f"Login error: {e}")
+                            st.error("User not found")
+                    except Exception as e:
+                        st.error(f"Login error: {e}")
                 else:
                     st.error("Please enter username and password")
-        
-        with tab2:
+
+            with tab2:
             st.markdown("### Create Account")
             new_username = st.text_input("Username", key="signup_username")
             new_password = st.text_input("Password", type="password", key="signup_password")
