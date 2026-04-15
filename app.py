@@ -309,9 +309,15 @@ if st.session_state.get("logged_in"):
             
             # Delete button
             all_ids = msg.get("all_ids", [])
+            # Fallback if all_ids empty? Sometimes during development it might be empty
             if all_ids:
                 if st.button(f"Delete Interaction #{idx + 1}", key=f"del_{idx}"):
                     delete_interaction(uri, token, all_ids)
+                    st.session_state.messages.pop(idx)
+                    st.rerun()
+            else:
+                # If no IDs are available from Zilliz insertion, just remove from session state
+                if st.button(f"Delete Interaction #{idx + 1} (Session Only)", key=f"del_{idx}"):
                     st.session_state.messages.pop(idx)
                     st.rerun()
 
