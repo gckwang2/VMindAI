@@ -319,33 +319,19 @@ if st.session_state.get("logged_in"):
     if raw_history:
         st.markdown("---")
         st.markdown("### Past Interactions (Read Only)")
-        # Group history by interaction using id or session
-        # For simplicity, just display them in a similar expander format
-        history_items = {}
+        # Display past interactions from Zilliz in a more organized way
+        # Group by interaction ID if possible
+        interaction_groups = {}
         for item in raw_history:
             role = item.get("role", "")
             text = item.get("text", "")
-            # Use a key based on role to group
+            # Group items by their ID if available, or session
+            # For now, just display them as individual items
             if "user_prompt" in role:
-                history_items.setdefault("user", []).append(text)
-            elif "output1" in role:
-                history_items.setdefault("output1", []).append(text)
-            elif "output2" in role:
-                history_items.setdefault("output2", []).append(text)
-            elif "output3" in role:
-                history_items.setdefault("output3", []).append(text)
-            elif "output4" in role:
-                history_items.setdefault("output4", []).append(text)
-            elif "master" in role:
-                history_items.setdefault("master", []).append(text)
-        
-        # Group by interaction ID if possible, for now just show all items
-        for key in ["user", "output1", "output2", "output3", "output4", "master"]:
-            if key in history_items and history_items[key]:
-                label = "User Prompt" if key == "user" else ("Master Synthesis" if key == "master" else f"{key.upper()}")
-                for text in history_items[key]:
-                    with st.expander(label=label, expanded=False):
-                        st.markdown(text)
+                st.markdown(f"**User Prompt**: {text}")
+            elif "master_output" in role:
+                st.markdown(f"**Master Output**: {text}")
+            # Add other roles as needed
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
