@@ -41,7 +41,8 @@ def run_chat_engine():
     if prompt := st.chat_input("Enter your query or draft...", key="main_chat_input"):
         if not st.session_state.get("logged_in", False):
             st.session_state.pending_prompt = prompt
-            return "auth_required"
+            st.session_state.show_auth_dialog = True
+            st.rerun()
         actual_prompt = prompt if prompt else st.session_state.pop("pending_prompt", "")
         with st.chat_message("assistant"):
             with st.status("Processing Query...", expanded=True) as status:

@@ -287,10 +287,15 @@ if st.session_state.get("logged_in"):
     current_username = st.session_state["username"]
     uri, token = get_active_credentials()
     raw_history = load_history(uri, token, current_username)
-    
+
     st.subheader("Consultation History")
 else:
     st.warning("Please log in to use the system.")
+
+# Check if we need to show auth dialog (user tried to chat without logging in)
+if st.session_state.get("show_auth_dialog", False):
+    st.session_state.pop("show_auth_dialog", None)
+    show_auth_dialog()
 
 # Chat input
 run_chat_engine()
