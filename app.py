@@ -283,6 +283,21 @@ if st.session_state.get("logged_in"):
     raw_history = load_history(uri, token, current_username)
 
     st.subheader("Consultation History")
+    # Display messages stored in session state for the current session
+    for msg in st.session_state.messages:
+        with st.chat_message("user"):
+            st.write(msg.get("user", ""))
+        with st.chat_message("assistant"):
+            st.write(msg.get("master", ""))
+
+    # Display history from Zilliz
+    for item in raw_history:
+        if item["role"] == "user_prompt":
+            with st.chat_message("user"):
+                st.write(item["text"])
+        elif item["role"] == "master_output":
+            with st.chat_message("assistant"):
+                st.write(item["text"])
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
