@@ -131,7 +131,7 @@ def call_gemini_flash_synthesize(api_key, model, output1, output2, output3, outp
     
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     
-    prompt_text = f"""You are an Expert Editor. Your task is to synthesize four AI responses into one master response, based on the original context and prompt.
+    prompt_text = f"""You are an Expert Editor. Your task is to synthesize three AI responses into one master response, based on the original context and prompt.
 
 Original Prompt & Context (Output 1):
 {output1}
@@ -145,10 +145,7 @@ Response B (LLM 3 - Gemini Pro):
 Response C (LLM 4 - Llama-4-Scout):
 {output4}
 
-Response D (LLM 5 - Meta AI Web):
-{output5}
-
-Synthesize Response A, Response B, Response C, and Response D into a cohesive, comprehensive master output that:
+Synthesize Response A, Response B, and Response C into a cohesive, comprehensive master output that:
 1. Integrates the strongest insights from all responses
 2. Resolves any contradictions
 3. Provides a unified, authoritative response
