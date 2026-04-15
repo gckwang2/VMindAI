@@ -31,7 +31,7 @@ from ChatMain import run_chat_engine
 
 # --- 1. CONFIG & IDENTITY ---
 # Attempt to use a common embedding model
-EMBED_MODEL = "text-embedding-001"
+EMBED_MODEL = "text-embedding-gecko-003"
 current_username = "Generic_Ensemble_User"
 
 def get_secret(key):
