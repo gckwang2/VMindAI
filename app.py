@@ -173,6 +173,9 @@ def show_auth_dialog():
                                 st.session_state["user_zilliz_uri"] = results[0]["zilliz_uri"]
                                 st.session_state["user_zilliz_token"] = results[0]["encrypted_zilliz_token"]
                                 st.session_state["username"] = login_username
+                                # Show success message
+                                st.success("Login successful! Closing dialog...")
+                                time.sleep(1.5)
                                 # Explicitly hide the dialog and rerun
                                 st.session_state["show_auth_dialog"] = False
                                 st.rerun()
