@@ -190,6 +190,9 @@ def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, D
                 st.markdown(master_output)
 
             status.update(label="Analysis Complete", state="complete", expanded=False)
+            
+            # Force a rerun to show the interaction in the history list with the delete button
+            st.rerun()
         except Exception as e:
             st.error(f"Pipeline Error: {e}")
 
