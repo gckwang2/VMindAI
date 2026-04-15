@@ -309,14 +309,11 @@ if st.session_state.get("logged_in"):
             
             # Delete button
             all_ids = msg.get("all_ids", [])
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if all_ids and st.button(f"Delete", key=f"del_{idx}"):
+            if all_ids:
+                if st.button(f"Delete Interaction #{idx + 1}", key=f"del_{idx}"):
                     delete_interaction(uri, token, all_ids)
                     st.session_state.messages.pop(idx)
                     st.rerun()
-            with col2:
-                st.button(f"Expand", key=f"expand_{idx}", disabled=True)
 
     # Display history from Zilliz (read-only, no delete as it's already stored)
     if raw_history:
