@@ -315,22 +315,65 @@ if st.session_state.get("logged_in"):
                     st.session_state.messages.pop(idx)
                     st.rerun()
 
-    # Display history from Zilliz (read-only, no delete as it's already stored)
+# Display history from Zilliz (read-only, no delete as it's already stored)
     if raw_history:
         st.markdown("---")
         st.markdown("### Past Interactions (Read Only)")
         # Display past interactions from Zilliz in windows with delete buttons
-        # Group items by interaction ID if possible
-        interaction_groups = {}
-        # Create a mapping of user prompts to their corresponding outputs
+        # Group history items into interactions
+        # Each interaction starts with a "user_prompt" role and includes all subsequent entries
+        # until the next "user_prompt" or end of list
+        interactions = []
+        current_interaction = []
+        
         for item in raw_history:
             role = item.get("role", "")
-            text = item.get("text", "")
-            if role == "user_prompt":
-                st.markdown(f"**User Prompt**: {text}")
-            elif role == "master_output":
-                st.markdown(f"**Master Output**: {text}")
-            # Add other roles as needed
+            if role == "user_prompt" and current_interaction:
+                # Start of a new interaction, save the previous one
+                interactions.append(current_interaction)
+                current_interaction = [item]
+            else:
+                current_interaction.append(item)
+        
+        # Don't forget the last interaction
+        if current_interaction:
+            interactions.append(current_interaction)
+        
+        # Display each interaction in its own expander with delete button
+        for interaction_idx, interaction_items in enumerate(interactions):
+            with st.expander(label=f"Past Interaction #{interaction_idx + 1}", expanded=False):
+                # Display all items in this interaction
+                for item in interaction_items:
+                    role = item.get("role", "")
+                    text = item.get("text", "")
+                    if role == "user_prompt":
+                        st.markdown(f"**User Prompt**: {text}")
+                    elif role == "master_output":
+                        st.markdown(f"**Master Output**: {text}")
+                    elif role == "output1_user_prompt":
+                        st.markdown(f"**Prompt Creator**: {text}")
+                    elif role == "output2_llm_a":
+                        st.markdown(f"**Qwen (LLM 1)**: {text}")
+                    elif role == "output3_llm_b":
+                        st.markdown(f"**Gemini Pro (LLM 2)**: {text}")
+                    elif role == "output4_llm_c":
+                        st.markdown(f"**Groq (LLM 3)**: {text}")
+                    elif role == "output5_llm_d":
+                        st.markdown(f"**LLM 5 Disabled**: {text}")
+                    else:
+                        st.markdown(f"**{role}**: {text}")
+                
+                # Add delete button for this past interaction
+                # Collect all IDs for this interaction
+                interaction_ids = [item.get("id") for item in interaction_items if item.get("id") is not None]
+                if interaction_ids and st.button(f"Delete This Interaction", key=f"del_past_{interaction_idx}"):
+                    try:
+                        # Delete all entries for this interaction from Zilliz
+                        delete_interaction(uri, token, interaction_ids)
+                        st.success("Interaction deleted from database!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting interaction: {e}")
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
