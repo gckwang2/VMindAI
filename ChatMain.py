@@ -57,125 +57,135 @@ def run_chat_engine():
 
 def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL):
     """Helper to process the actual prompt."""
-    with st.chat_message("assistant"):
-        with st.status("Processing Query...", expanded=True) as status:
-            try:
-                pipeline_start = time.time()
-                current_username = st.session_state["username"]
-                uri, token = get_active_credentials()
-                col = init_zilliz(uri, token)
+    # Display user prompt immediately in chat
+    with st.chat_message("user"):
+        st.write(actual_prompt)
+    
+    # Create a status indicator
+    with st.status("Processing Query...", expanded=True) as status:
+        try:
+            pipeline_start = time.time()
+            current_username = st.session_state["username"]
+            uri, token = get_active_credentials()
+            col = init_zilliz(uri, token)
 
-                status.update(label="Retrieving memory...", state="running")
-                t_context = time.time() - pipeline_start
-                past_context = retrieve_relevant_context(
-                    actual_prompt, current_username, col, client, EMBED_MODEL
-                )
+            status.update(label="Retrieving memory...", state="running")
+            t_context = time.time() - pipeline_start
+            past_context = retrieve_relevant_context(
+                actual_prompt, current_username, col, client, EMBED_MODEL
+            )
 
-                status.update(label="Generating optimized user prompt (Output 1)...", state="running")
-                t0 = time.time()
-                raw_output1 = call_gemini_prompt_creator(
-                    GOOGLE_API_KEY,
-                    GEMINI_FLASH_MODEL,
-                    f"Context: {past_context}\n\nUser Entry: {actual_prompt}"
-                )
-                t1 = time.time() - t0
+            status.update(label="Generating optimized user prompt (Output 1)...", state="running")
+            t0 = time.time()
+            raw_output1 = call_gemini_prompt_creator(
+                GOOGLE_API_KEY,
+                GEMINI_FLASH_MODEL,
+                f"Context: {past_context}\n\nUser Entry: {actual_prompt}"
+            )
+            t1 = time.time() - t0
 
-                status.update(label="Generating strategies with LLMs concurrently...", state="running")
-                def timed_call(func, *args):
-                    start_t = time.time()
-                    res = func(*args)
-                    dur = time.time() - start_t
-                    return res, dur
+            status.update(label="Generating strategies with LLMs concurrently...", state="running")
+            def timed_call(func, *args):
+                start_t = time.time()
+                res = func(*args)
+                dur = time.time() - start_t
+                return res, dur
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    future_a = executor.submit(timed_call, call_qwen, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, raw_output1)
-                    future_b = executor.submit(timed_call, call_gemini_pro, GOOGLE_API_KEY, GEMINI_PRO_MODEL, raw_output1)
-                    future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
-                    raw_output2, t2 = future_a.result()
-                    raw_output3, tA = future_b.result()
-                    raw_output4, t4 = future_c.result()
-                    raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                future_a = executor.submit(timed_call, call_qwen, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, raw_output1)
+                future_b = executor.submit(timed_call, call_gemini_pro, GOOGLE_API_KEY, GEMINI_PRO_MODEL, raw_output1)
+                future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
+                raw_output2, t2 = future_a.result()
+                raw_output3, tA = future_b.result()
+                raw_output4, t4 = future_c.result()
+                raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
 
-                status.update(label="Synthesizing master output...", state="running")
-                t0 = time.time()
-                raw_master_output = call_gemini_flash_synthesize(
-                    GOOGLE_API_KEY,
-                    GEMINI_FLASH_MODEL,
-                    raw_output1, raw_output2, raw_output3, raw_output4, raw_output5
-                )
-                t_master = time.time() - t0
+            status.update(label="Synthesizing master output...", state="running")
+            t0 = time.time()
+            raw_master_output = call_gemini_flash_synthesize(
+                GOOGLE_API_KEY,
+                GEMINI_FLASH_MODEL,
+                raw_output1, raw_output2, raw_output3, raw_output4, raw_output5
+            )
+            t_master = time.time() - t0
 
-                output1 = f"{raw_output1}\n\n*(Time taken: {t1:.2f}s)*"
-                output2 = f"{raw_output2}\n\n*(Time taken: {t2:.2f}s)*"
-                output3 = f"{raw_output3}\n\n*(Time taken: {tA:.2f}s)*"
-                output4 = f"{raw_output4}\n\n*(Time taken: {t4:.2f}s)*"
-                output5 = f"{raw_output5}\n\n*(Time taken: {t5:.2f}s)*"
-                master_output = f"{raw_master_output}\n\n*(Time taken: {t_master:.2f}s)*"
+            output1 = f"{raw_output1}\n\n*(Time taken: {t1:.2f}s)*"
+            output2 = f"{raw_output2}\n\n*(Time taken: {t2:.2f}s)*"
+            output3 = f"{raw_output3}\n\n*(Time taken: {tA:.2f}s)*"
+            output4 = f"{raw_output4}\n\n*(Time taken: {t4:.2f}s)*"
+            output5 = f"{raw_output5}\n\n*(Time taken: {t5:.2f}s)*"
+            master_output = f"{raw_master_output}\n\n*(Time taken: {t_master:.2f}s)*"
 
-                status.update(label="Archiving to Zilliz (Generating embeddings)...", state="running")
-                t_archive_start = time.time()
+            status.update(label="Archiving to Zilliz (Generating embeddings)...", state="running")
+            t_archive_start = time.time()
 
-                safe_prompt = actual_prompt[:20000]
-                safe_output1 = output1[:20000] if output1 else ""
-                safe_output2 = output2[:20000] if output2 else ""
-                safe_output3 = output3[:20000] if output3 else ""
-                safe_output4 = output4[:20000] if output4 else ""
-                safe_output5 = output5[:20000] if output5 else ""
-                safe_master = master_output[:20000] if master_output else ""
+            safe_prompt = actual_prompt[:20000]
+            safe_output1 = output1[:20000] if output1 else ""
+            safe_output2 = output2[:20000] if output2 else ""
+            safe_output3 = output3[:20000] if output3 else ""
+            safe_output4 = output4[:20000] if output4 else ""
+            safe_output5 = output5[:20000] if output5 else ""
+            safe_master = master_output[:20000] if master_output else ""
 
-                prompt_emb = get_embedding(client, EMBED_MODEL, safe_prompt)
-                output1_emb = get_embedding(client, EMBED_MODEL, safe_output1)
-                output2_emb = get_embedding(client, EMBED_MODEL, safe_output2)
-                output3_emb = get_embedding(client, EMBED_MODEL, safe_output3)
-                output4_emb = get_embedding(client, EMBED_MODEL, safe_output4)
-                output5_emb = get_embedding(client, EMBED_MODEL, safe_output5)
-                master_emb = get_embedding(client, EMBED_MODEL, safe_master)
+            prompt_emb = get_embedding(client, EMBED_MODEL, safe_prompt)
+            output1_emb = get_embedding(client, EMBED_MODEL, safe_output1)
+            output2_emb = get_embedding(client, EMBED_MODEL, safe_output2)
+            output3_emb = get_embedding(client, EMBED_MODEL, safe_output3)
+            output4_emb = get_embedding(client, EMBED_MODEL, safe_output4)
+            output5_emb = get_embedding(client, EMBED_MODEL, safe_output5)
+            master_emb = get_embedding(client, EMBED_MODEL, safe_master)
 
-                current_username = st.session_state["username"]
-                insert_data = [[prompt_emb], [safe_prompt], [current_username], ["user_prompt"]]
-                if output1_emb:
-                    insert_data[0].append(output1_emb); insert_data[1].append(safe_output1); insert_data[2].append(current_username); insert_data[3].append("output1_user_prompt")
-                if output2_emb:
-                    insert_data[0].append(output2_emb); insert_data[1].append(safe_output2); insert_data[2].append(current_username); insert_data[3].append("output2_llm_a")
-                if output3_emb:
-                    insert_data[0].append(output3_emb); insert_data[1].append(safe_output3); insert_data[2].append(current_username); insert_data[3].append("output3_llm_b")
-                if output4_emb:
-                    insert_data[0].append(output4_emb); insert_data[1].append(safe_output4); insert_data[2].append(current_username); insert_data[3].append("output4_llm_c")
-                if output5_emb:
-                    insert_data[0].append(output5_emb); insert_data[1].append(safe_output5); insert_data[2].append(current_username); insert_data[3].append("output5_llm_d")
-                if master_emb:
-                    insert_data[0].append(master_emb); insert_data[1].append(safe_master); insert_data[2].append(current_username); insert_data[3].append("master_output")
+            current_username = st.session_state["username"]
+            insert_data = [[prompt_emb], [safe_prompt], [current_username], ["user_prompt"]]
+            if output1_emb:
+                insert_data[0].append(output1_emb); insert_data[1].append(safe_output1); insert_data[2].append(current_username); insert_data[3].append("output1_user_prompt")
+            if output2_emb:
+                insert_data[0].append(output2_emb); insert_data[1].append(safe_output2); insert_data[2].append(current_username); insert_data[3].append("output2_llm_a")
+            if output3_emb:
+                insert_data[0].append(output3_emb); insert_data[1].append(safe_output3); insert_data[2].append(current_username); insert_data[3].append("output3_llm_b")
+            if output4_emb:
+                insert_data[0].append(output4_emb); insert_data[1].append(safe_output4); insert_data[2].append(current_username); insert_data[3].append("output4_llm_c")
+            if output5_emb:
+                insert_data[0].append(output5_emb); insert_data[1].append(safe_output5); insert_data[2].append(current_username); insert_data[3].append("output5_llm_d")
+            if master_emb:
+                insert_data[0].append(master_emb); insert_data[1].append(safe_master); insert_data[2].append(current_username); insert_data[3].append("master_output")
 
-                res = store_interaction(uri, token, insert_data)
+            res = store_interaction(uri, token, insert_data)
 
-                t_archive = time.time() - t_archive_start
-                pipeline_duration = time.time() - pipeline_start
+            t_archive = time.time() - t_archive_start
+            pipeline_duration = time.time() - pipeline_start
 
-                master_output = f"{master_output}\n\n*(Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
+            master_output = f"{master_output}\n\n*(Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
 
-                p_keys = res.primary_keys
-                # Store as a single interaction unit
-                st.session_state.messages.append({
-                    "user": actual_prompt,
-                    "u_id": p_keys[0],
-                    "output1": output1,
-                    "o1_id": p_keys[1] if len(p_keys) > 1 else None,
-                    "output2": output2,
-                    "o2_id": p_keys[2] if len(p_keys) > 2 else None,
-                    "output3": output3,
-                    "o3_id": p_keys[3] if len(p_keys) > 3 else None,
-                    "output4": output4,
-                    "o4_id": p_keys[4] if len(p_keys) > 4 else None,
-                    "output5": output5,
-                    "o5_id": p_keys[5] if len(p_keys) > 5 else None,
-                    "master": master_output,
-                    "m_id": p_keys[6] if len(p_keys) > 6 else None,
-                    "all_ids": p_keys
-                })
+            p_keys = res.primary_keys
+            # Store as a single interaction unit
+            interaction_data = {
+                "user": actual_prompt,
+                "u_id": p_keys[0],
+                "output1": output1,
+                "o1_id": p_keys[1] if len(p_keys) > 1 else None,
+                "output2": output2,
+                "o2_id": p_keys[2] if len(p_keys) > 2 else None,
+                "output3": output3,
+                "o3_id": p_keys[3] if len(p_keys) > 3 else None,
+                "output4": output4,
+                "o4_id": p_keys[4] if len(p_keys) > 4 else None,
+                "output5": output5,
+                "o5_id": p_keys[5] if len(p_keys) > 5 else None,
+                "master": master_output,
+                "m_id": p_keys[6] if len(p_keys) > 6 else None,
+                "all_ids": p_keys
+            }
+            st.session_state.messages.append(interaction_data)
 
-                status.update(label="Analysis Complete", state="complete", expanded=False)
-            except Exception as e:
-                st.error(f"Pipeline Error: {e}")
+            # Display the master output in the chat interface
+            with st.chat_message("assistant"):
+                st.markdown("**Master Synthesis**:")
+                st.markdown(master_output)
+
+            status.update(label="Analysis Complete", state="complete", expanded=False)
+        except Exception as e:
+            st.error(f"Pipeline Error: {e}")
 
 def retrieve_relevant_context(query_text, session_id, col, client, embed_model, top_k=3):
     if col.num_entities == 0:
