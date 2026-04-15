@@ -131,7 +131,10 @@ def delete_interaction(uri, token, ids_to_delete):
         col = get_active_collection(uri, token)
         delete_expr = f"id in {ids_to_delete}"
         col.delete(delete_expr)
+        
+        # Flush is async in newer Milvus versions and might not complete immediately.
         col.flush()
+        
         return True
     except Exception as e:
         st.error(f"Deletion failed: {e}")
