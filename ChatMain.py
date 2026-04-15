@@ -157,11 +157,17 @@ def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, D
 
             master_output = f"{master_output}\n\n*(Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
 
-            p_keys = res.primary_keys
+            # If store_interaction returns None (e.g., due to an error), handle it gracefully
+            if res and hasattr(res, 'primary_keys'):
+                p_keys = res.primary_keys
+            else:
+                p_keys = []
+                st.warning("Interaction was not stored in Zilliz database properly.")
+
             # Store as a single interaction unit
             interaction_data = {
                 "user": actual_prompt,
-                "u_id": p_keys[0],
+                "u_id": p_keys[0] if len(p_keys) > 0 else None,
                 "output1": output1,
                 "o1_id": p_keys[1] if len(p_keys) > 1 else None,
                 "output2": output2,
