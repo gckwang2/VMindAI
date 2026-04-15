@@ -53,7 +53,9 @@ def run_chat_engine():
     # Check if we have a pending prompt from before login (after successful login)
     if st.session_state.get("logged_in") and st.session_state.get("pending_prompt"):
         actual_prompt = st.session_state.pop("pending_prompt")
-        _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
+        # Only process if we haven't already processed this exact prompt in this session
+        if not any(msg.get("user") == actual_prompt for msg in st.session_state.messages):
+            _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
 
 def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL):
     """Helper to process the actual prompt."""
@@ -136,6 +138,15 @@ def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, D
             master_emb = get_embedding(client, EMBED_MODEL, safe_master) if safe_master else None
 
             current_username = st.session_state["username"]
+            
+            # Check if this exact prompt is already in the session state to avoid double processing
+            # (e.g., if a rerun happens unexpectedly)
+            for msg in st.session_state.messages:
+                if msg.get("user") == actual_prompt and msg.get("master") is not None:
+                    # We might be re-running after it's already processed.
+                    # Just return to avoid duplicate Zilliz inserts.
+                    return
+
             insert_data = [[prompt_emb], [safe_prompt], [current_username], ["user_prompt"]]
             if output1_emb is not None:
                 insert_data[0].append(output1_emb); insert_data[1].append(safe_output1); insert_data[2].append(current_username); insert_data[3].append("output1_user_prompt")
