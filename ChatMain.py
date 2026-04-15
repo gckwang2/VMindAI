@@ -33,148 +33,146 @@ def run_chat_engine():
     EMBED_MODEL = st.session_state.get("EMBED_MODEL")
 
     client = genai.Client(api_key=GOOGLE_API_KEY)
-    
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
         st.session_state.pending_prompt = None
 
+    # If not logged in, show message and don't show chat input
+    if not st.session_state.get("logged_in", False):
+        st.info("Please log in to start a conversation.")
+        return
+
+    # Check if we have a pending prompt from before login
+    if st.session_state.get("pending_prompt"):
+        actual_prompt = st.session_state.pop("pending_prompt")
+        _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
+        return
+
     if prompt := st.chat_input("Enter your query or draft...", key="main_chat_input"):
-        if not st.session_state.get("logged_in", False):
-            st.session_state.pending_prompt = prompt
-            st.session_state.show_auth_dialog = True
-            st.rerun()
-        actual_prompt = prompt if prompt else st.session_state.pop("pending_prompt", "")
-        with st.chat_message("assistant"):
-            with st.status("Processing Query...", expanded=True) as status:
-                try:
-                    pipeline_start = time.time()
-                    current_username = st.session_state["username"]
-                    uri, token = get_active_credentials()
-                    col = init_zilliz(uri, token)
+        _process_prompt(prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL)
 
-                    status.update(label="Retrieving memory...", state="running")
-                    t_context = time.time() - pipeline_start
-                    past_context = retrieve_relevant_context(
-                        actual_prompt, current_username, col, client, EMBED_MODEL
-                    )
+def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, GEMINI_PRO_MODEL, GROQ_API_KEY, GROQ_MODEL, EMBED_MODEL):
+    """Helper to process the actual prompt."""
+    with st.chat_message("assistant"):
+        with st.status("Processing Query...", expanded=True) as status:
+            try:
+                pipeline_start = time.time()
+                current_username = st.session_state["username"]
+                uri, token = get_active_credentials()
+                col = init_zilliz(uri, token)
 
-                    status.update(label="Generating optimized user prompt (Output 1)...", state="running")
-                    t0 = time.time()
-                    raw_output1 = call_gemini_prompt_creator(
-                        GOOGLE_API_KEY,
-                        GEMINI_FLASH_MODEL,
-                        f"Context: {past_context}\n\nUser Entry: {actual_prompt}"
-                    )
-                    t1 = time.time() - t0
+                status.update(label="Retrieving memory...", state="running")
+                t_context = time.time() - pipeline_start
+                past_context = retrieve_relevant_context(
+                    actual_prompt, current_username, col, client, EMBED_MODEL
+                )
 
-                    status.update(label="Generating strategies with LLMs concurrently...", state="running")
-                    def timed_call(func, *args):
-                        start_t = time.time()
-                        res = func(*args)
-                        dur = time.time() - start_t
-                        return res, dur
+                status.update(label="Generating optimized user prompt (Output 1)...", state="running")
+                t0 = time.time()
+                raw_output1 = call_gemini_prompt_creator(
+                    GOOGLE_API_KEY,
+                    GEMINI_FLASH_MODEL,
+                    f"Context: {past_context}\n\nUser Entry: {actual_prompt}"
+                )
+                t1 = time.time() - t0
 
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                        future_a = executor.submit(timed_call, call_qwen,
-                                                    DASHSCOPE_API_KEY,
-                                                    DASHSCOPE_MODEL,
-                                                    raw_output1)
-                        future_b = executor.submit(timed_call, call_gemini_pro,
-                                                    GOOGLE_API_KEY,
-                                                    GEMINI_PRO_MODEL,
-                                                    raw_output1)
-                        future_c = executor.submit(timed_call, call_groq_llm,
-                                                    GROQ_API_KEY,
-                                                    GROQ_MODEL,
-                                                    raw_output1)
-                        raw_output2, t2 = future_a.result()
-                        raw_output3, tA = future_b.result()
-                        raw_output4, t4 = future_c.result()
-                        raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
+                status.update(label="Generating strategies with LLMs concurrently...", state="running")
+                def timed_call(func, *args):
+                    start_t = time.time()
+                    res = func(*args)
+                    dur = time.time() - start_t
+                    return res, dur
 
-                    status.update(label="Synthesizing master output...", state="running")
-                    t0 = time.time()
-                    raw_master_output = call_gemini_flash_synthesize(
-                        GOOGLE_API_KEY,
-                        GEMINI_FLASH_MODEL,
-                        raw_output1, raw_output2, raw_output3, raw_output4, raw_output5
-                    )
-                    t_master = time.time() - t0
+                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                    future_a = executor.submit(timed_call, call_qwen, DASHSCOPE_API_KEY, DASHSCOPE_MODEL, raw_output1)
+                    future_b = executor.submit(timed_call, call_gemini_pro, GOOGLE_API_KEY, GEMINI_PRO_MODEL, raw_output1)
+                    future_c = executor.submit(timed_call, call_groq_llm, GROQ_API_KEY, GROQ_MODEL, raw_output1)
+                    raw_output2, t2 = future_a.result()
+                    raw_output3, tA = future_b.result()
+                    raw_output4, t4 = future_c.result()
+                    raw_output5, t5 = "LLM 5 Disabled for testing.", 0.0
 
-                    output1 = f"{raw_output1}\n\n*(Time taken: {t1:.2f}s)*"
-                    output2 = f"{raw_output2}\n\n*(Time taken: {t2:.2f}s)*"
-                    output3 = f"{raw_output3}\n\n*(Time taken: {tA:.2f}s)*"
-                    output4 = f"{raw_output4}\n\n*(Time taken: {t4:.2f}s)*"
-                    output5 = f"{raw_output5}\n\n*(Time taken: {t5:.2f}s)*"
-                    master_output = f"{raw_master_output}\n\n*(Time taken: {t_master:.2f}s)*"
+                status.update(label="Synthesizing master output...", state="running")
+                t0 = time.time()
+                raw_master_output = call_gemini_flash_synthesize(
+                    GOOGLE_API_KEY,
+                    GEMINI_FLASH_MODEL,
+                    raw_output1, raw_output2, raw_output3, raw_output4, raw_output5
+                )
+                t_master = time.time() - t0
 
-                    status.update(label="Archiving to Zilliz (Generating embeddings)...", state="running")
-                    t_archive_start = time.time()
+                output1 = f"{raw_output1}\n\n*(Time taken: {t1:.2f}s)*"
+                output2 = f"{raw_output2}\n\n*(Time taken: {t2:.2f}s)*"
+                output3 = f"{raw_output3}\n\n*(Time taken: {tA:.2f}s)*"
+                output4 = f"{raw_output4}\n\n*(Time taken: {t4:.2f}s)*"
+                output5 = f"{raw_output5}\n\n*(Time taken: {t5:.2f}s)*"
+                master_output = f"{raw_master_output}\n\n*(Time taken: {t_master:.2f}s)*"
 
-                    safe_prompt = actual_prompt[:20000]
-                    safe_output1 = output1[:20000] if output1 else ""
-                    safe_output2 = output2[:20000] if output2 else ""
-                    safe_output3 = output3[:20000] if output3 else ""
-                    safe_output4 = output4[:20000] if output4 else ""
-                    safe_output5 = output5[:20000] if output5 else ""
-                    safe_master = master_output[:20000] if master_output else ""
+                status.update(label="Archiving to Zilliz (Generating embeddings)...", state="running")
+                t_archive_start = time.time()
 
-                    prompt_emb = get_embedding(client, EMBED_MODEL, safe_prompt)
-                    output1_emb = get_embedding(client, EMBED_MODEL, safe_output1)
-                    output2_emb = get_embedding(client, EMBED_MODEL, safe_output2)
-                    output3_emb = get_embedding(client, EMBED_MODEL, safe_output3)
-                    output4_emb = get_embedding(client, EMBED_MODEL, safe_output4)
-                    output5_emb = get_embedding(client, EMBED_MODEL, safe_output5)
-                    master_emb = get_embedding(client, EMBED_MODEL, safe_master)
+                safe_prompt = actual_prompt[:20000]
+                safe_output1 = output1[:20000] if output1 else ""
+                safe_output2 = output2[:20000] if output2 else ""
+                safe_output3 = output3[:20000] if output3 else ""
+                safe_output4 = output4[:20000] if output4 else ""
+                safe_output5 = output5[:20000] if output5 else ""
+                safe_master = master_output[:20000] if master_output else ""
 
-                    current_username = st.session_state["username"]
-                    insert_data = [[prompt_emb], [safe_prompt], [current_username], ["user_prompt"]]
-                    if output1_emb:
-                        insert_data[0].append(output1_emb); insert_data[1].append(safe_output1); insert_data[2].append(current_username); insert_data[3].append("output1_user_prompt")
-                    if output2_emb:
-                        insert_data[0].append(output2_emb); insert_data[1].append(safe_output2); insert_data[2].append(current_username); insert_data[3].append("output2_llm_a")
-                    if output3_emb:
-                        insert_data[0].append(output3_emb); insert_data[1].append(safe_output3); insert_data[2].append(current_username); insert_data[3].append("output3_llm_b")
-                    if output4_emb:
-                        insert_data[0].append(output4_emb); insert_data[1].append(safe_output4); insert_data[2].append(current_username); insert_data[3].append("output4_llm_c")
-                    if output5_emb:
-                        insert_data[0].append(output5_emb); insert_data[1].append(safe_output5); insert_data[2].append(current_username); insert_data[3].append("output5_llm_d")
-                    if master_emb:
-                        insert_data[0].append(master_emb); insert_data[1].append(safe_master); insert_data[2].append(current_username); insert_data[3].append("master_output")
+                prompt_emb = get_embedding(client, EMBED_MODEL, safe_prompt)
+                output1_emb = get_embedding(client, EMBED_MODEL, safe_output1)
+                output2_emb = get_embedding(client, EMBED_MODEL, safe_output2)
+                output3_emb = get_embedding(client, EMBED_MODEL, safe_output3)
+                output4_emb = get_embedding(client, EMBED_MODEL, safe_output4)
+                output5_emb = get_embedding(client, EMBED_MODEL, safe_output5)
+                master_emb = get_embedding(client, EMBED_MODEL, safe_master)
 
-                    res = store_interaction(uri, token, insert_data)
+                current_username = st.session_state["username"]
+                insert_data = [[prompt_emb], [safe_prompt], [current_username], ["user_prompt"]]
+                if output1_emb:
+                    insert_data[0].append(output1_emb); insert_data[1].append(safe_output1); insert_data[2].append(current_username); insert_data[3].append("output1_user_prompt")
+                if output2_emb:
+                    insert_data[0].append(output2_emb); insert_data[1].append(safe_output2); insert_data[2].append(current_username); insert_data[3].append("output2_llm_a")
+                if output3_emb:
+                    insert_data[0].append(output3_emb); insert_data[1].append(safe_output3); insert_data[2].append(current_username); insert_data[3].append("output3_llm_b")
+                if output4_emb:
+                    insert_data[0].append(output4_emb); insert_data[1].append(safe_output4); insert_data[2].append(current_username); insert_data[3].append("output4_llm_c")
+                if output5_emb:
+                    insert_data[0].append(output5_emb); insert_data[1].append(safe_output5); insert_data[2].append(current_username); insert_data[3].append("output5_llm_d")
+                if master_emb:
+                    insert_data[0].append(master_emb); insert_data[1].append(safe_master); insert_data[2].append(current_username); insert_data[3].append("master_output")
 
-                    t_archive = time.time() - t_archive_start
-                    pipeline_duration = time.time() - pipeline_start
+                res = store_interaction(uri, token, insert_data)
 
-                    master_output = f"{master_output}\n\n*(Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
+                t_archive = time.time() - t_archive_start
+                pipeline_duration = time.time() - pipeline_start
 
-                    p_keys = res.primary_keys
-                    for idx, key in enumerate(p_keys[1:], 1):
-                        st.session_state.messages.append({
-                            "user": actual_prompt if idx == 1 else "",
-                            "u_id": p_keys[0],
-                            "output1": output1 if idx == 1 else "",
-                            "o1_id": key if idx == 1 else None,
-                            "output2": output2 if idx == 2 else "",
-                            "o2_id": key if idx == 2 else None,
-                            "output3": output3 if idx == 3 else "",
-                            "o3_id": key if idx == 3 else None,
-                            "output4": output4 if idx == 4 else "",
-                            "o4_id": key if idx == 4 else None,
-                            "output5": output5 if idx == 5 else "",
-                            "o5_id": key if idx == 5 else None,
-                            "master": master_output if idx == 6 else "",
-                            "m_id": key if idx == 6 else None,
-                            "all_ids": p_keys[:idx+1]
-                        })
+                master_output = f"{master_output}\n\n*(Total Pipeline Time: {pipeline_duration:.2f}s | Context Retrieval: {t_context:.2f}s | Archiving & Embeddings: {t_archive:.2f}s)*"
 
-                    status.update(label="Analysis Complete", state="complete", expanded=False)
-                except Exception as e:
-                    st.error(f"Pipeline Error: {e}")
-    elif st.session_state.get("pending_prompt") and st.session_state.get("logged_in", False):
-        # Re-run the engine with the pending prompt
-        return run_chat_engine()
+                p_keys = res.primary_keys
+                for idx, key in enumerate(p_keys[1:], 1):
+                    st.session_state.messages.append({
+                        "user": actual_prompt if idx == 1 else "",
+                        "u_id": p_keys[0],
+                        "output1": output1 if idx == 1 else "",
+                        "o1_id": key if idx == 1 else None,
+                        "output2": output2 if idx == 2 else "",
+                        "o2_id": key if idx == 2 else None,
+                        "output3": output3 if idx == 3 else "",
+                        "o3_id": key if idx == 3 else None,
+                        "output4": output4 if idx == 4 else "",
+                        "o4_id": key if idx == 4 else None,
+                        "output5": output5 if idx == 5 else "",
+                        "o5_id": key if idx == 5 else None,
+                        "master": master_output if idx == 6 else "",
+                        "m_id": key if idx == 6 else None,
+                        "all_ids": p_keys[:idx+1]
+                    })
+
+                status.update(label="Analysis Complete", state="complete", expanded=False)
+            except Exception as e:
+                st.error(f"Pipeline Error: {e}")
 
 def retrieve_relevant_context(query_text, session_id, col, client, embed_model, top_k=3):
     if col.num_entities == 0:
@@ -182,8 +180,7 @@ def retrieve_relevant_context(query_text, session_id, col, client, embed_model, 
     try:
         search_emb = client.models.embed_content(model=embed_model, contents=query_text).embeddings[0].values
         search_params = {"metric_type": "L2", "params": {"nprobe": 10}}
-        results = col.search(data=[search_emb], anns_field="vector", param=search_params, limit=top_k,
-                             output_fields=["text"], expr=f'session_id == "{session_id}"')
+        results = col.search(data=[search_emb], anns_field="vector", param=search_params, limit=top_k, output_fields=["text"], expr=f'session_id == "{session_id}"')
         return "\n\n---\n\n".join([hit.entity.get("text") for hit in results[0]]) if results[0] else ""
     except Exception as e:
         st.warning(f"Memory Retrieval failed: {e}")
