@@ -155,7 +155,7 @@ def show_auth_dialog():
             login_username = st.text_input("Username", key="login_username")
             login_password = st.text_input("Password", type="password", key="login_password")
             
-if st.button("Login", use_container_width=True, key="login_btn"):
+            if st.button("Login", use_container_width=True, key="login_btn"):
                 if login_username and login_password:
                     try:
                         uri = st.secrets["ZILLIZ_URI"]
@@ -182,8 +182,8 @@ if st.button("Login", use_container_width=True, key="login_btn"):
                         st.error(f"Login error: {e}")
                 else:
                     st.error("Please enter username and password")
-
-            with tab2:
+        
+        with tab2:
             st.markdown("### Create Account")
             new_username = st.text_input("Username", key="signup_username")
             new_password = st.text_input("Password", type="password", key="signup_password")
