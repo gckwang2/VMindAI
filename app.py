@@ -68,7 +68,7 @@ st.session_state["GEMINI_FLASH_MODEL"] = GEMINI_FLASH_MODEL
 st.session_state["GEMINI_PRO_MODEL"] = GEMINI_PRO_MODEL
 st.session_state["GROQ_API_KEY"] = GROQ_API_KEY
 st.session_state["GROQ_MODEL"] = GROQ_MODEL
-st.session_state["EMBED_MODEL"] = "text-embedding-004"
+st.session_state["EMBED_MODEL"] = EMBED_MODEL
 
 # Google GenAI Client
 client = genai.Client(api_key=GOOGLE_API_KEY)
