@@ -322,7 +322,7 @@ if st.session_state.get("logged_in"):
                 user_prompt = item.get("text", "")
                 break
         
-        short_prompt = (user_prompt[:40] + '...') if len(user_prompt) > 40 else user_prompt
+        short_prompt = (user_prompt[:100] + '...') if len(user_prompt) > 100 else user_prompt
         label = f"#{interaction_idx + 1} - {short_prompt}" if short_prompt else f"Interaction #{interaction_idx + 1}"
         
         # We can expand only the very last interaction
