@@ -128,26 +128,26 @@ def _process_prompt(actual_prompt, client, GOOGLE_API_KEY, GEMINI_FLASH_MODEL, D
             safe_master = master_output[:20000] if master_output else ""
 
             prompt_emb = get_embedding(client, EMBED_MODEL, safe_prompt)
-            output1_emb = get_embedding(client, EMBED_MODEL, safe_output1)
-            output2_emb = get_embedding(client, EMBED_MODEL, safe_output2)
-            output3_emb = get_embedding(client, EMBED_MODEL, safe_output3)
-            output4_emb = get_embedding(client, EMBED_MODEL, safe_output4)
-            output5_emb = get_embedding(client, EMBED_MODEL, safe_output5)
-            master_emb = get_embedding(client, EMBED_MODEL, safe_master)
+            output1_emb = get_embedding(client, EMBED_MODEL, safe_output1) if safe_output1 else None
+            output2_emb = get_embedding(client, EMBED_MODEL, safe_output2) if safe_output2 else None
+            output3_emb = get_embedding(client, EMBED_MODEL, safe_output3) if safe_output3 else None
+            output4_emb = get_embedding(client, EMBED_MODEL, safe_output4) if safe_output4 else None
+            output5_emb = get_embedding(client, EMBED_MODEL, safe_output5) if safe_output5 else None
+            master_emb = get_embedding(client, EMBED_MODEL, safe_master) if safe_master else None
 
             current_username = st.session_state["username"]
             insert_data = [[prompt_emb], [safe_prompt], [current_username], ["user_prompt"]]
-            if output1_emb:
+            if output1_emb is not None:
                 insert_data[0].append(output1_emb); insert_data[1].append(safe_output1); insert_data[2].append(current_username); insert_data[3].append("output1_user_prompt")
-            if output2_emb:
+            if output2_emb is not None:
                 insert_data[0].append(output2_emb); insert_data[1].append(safe_output2); insert_data[2].append(current_username); insert_data[3].append("output2_llm_a")
-            if output3_emb:
+            if output3_emb is not None:
                 insert_data[0].append(output3_emb); insert_data[1].append(safe_output3); insert_data[2].append(current_username); insert_data[3].append("output3_llm_b")
-            if output4_emb:
+            if output4_emb is not None:
                 insert_data[0].append(output4_emb); insert_data[1].append(safe_output4); insert_data[2].append(current_username); insert_data[3].append("output4_llm_c")
-            if output5_emb:
+            if output5_emb is not None:
                 insert_data[0].append(output5_emb); insert_data[1].append(safe_output5); insert_data[2].append(current_username); insert_data[3].append("output5_llm_d")
-            if master_emb:
+            if master_emb is not None:
                 insert_data[0].append(master_emb); insert_data[1].append(safe_master); insert_data[2].append(current_username); insert_data[3].append("master_output")
 
             res = store_interaction(uri, token, insert_data)
