@@ -322,17 +322,15 @@ if st.session_state.get("logged_in"):
         # Display past interactions from Zilliz in windows with delete buttons
         # Group items by interaction ID if possible
         interaction_groups = {}
+        # Create a mapping of user prompts to their corresponding outputs
         for item in raw_history:
-            # Group by session_id or other identifier if available
-            # For now, just display them as individual items
             role = item.get("role", "")
             text = item.get("text", "")
             if role == "user_prompt":
                 st.markdown(f"**User Prompt**: {text}")
             elif role == "master_output":
                 st.markdown(f"**Master Output**: {text}")
-            else:
-                st.markdown(f"**{role}**: {text}")
+            # Add other roles as needed
 
 # Check if we need to show auth dialog (user tried to chat without logging in)
 if st.session_state.get("show_auth_dialog", False):
