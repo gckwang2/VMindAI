@@ -314,6 +314,7 @@ if st.session_state.get("logged_in"):
                 if st.button(f"Delete Interaction #{idx + 1}", key=f"del_{idx}"):
                     delete_interaction(uri, token, all_ids)
                     st.session_state.messages.pop(idx)
+                    time.sleep(0.5) # Allow Zilliz flush to complete
                     st.rerun()
             else:
                 # If no IDs are available from Zilliz insertion, just remove from session state
