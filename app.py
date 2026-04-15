@@ -319,14 +319,10 @@ if st.session_state.get("logged_in"):
     if raw_history:
         st.markdown("---")
         st.markdown("### Past Interactions (Read Only)")
-        # Display past interactions from Zilliz in a more organized way
-        # Group by interaction ID if possible
-        interaction_groups = {}
+        # Display past interactions from Zilliz
         for item in raw_history:
             role = item.get("role", "")
             text = item.get("text", "")
-            # Group items by their ID if available, or session
-            # For now, just display them as individual items
             if "user_prompt" in role:
                 st.markdown(f"**User Prompt**: {text}")
             elif "master_output" in role:
