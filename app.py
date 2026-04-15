@@ -323,9 +323,9 @@ if st.session_state.get("logged_in"):
         for item in raw_history:
             role = item.get("role", "")
             text = item.get("text", "")
-            if "user_prompt" in role:
+            if role == "user_prompt":
                 st.markdown(f"**User Prompt**: {text}")
-            elif "master_output" in role:
+            elif role == "master_output":
                 st.markdown(f"**Master Output**: {text}")
             # Add other roles as needed
 
