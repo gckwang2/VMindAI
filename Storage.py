@@ -70,11 +70,11 @@ def decrypt_data(data):
 def init_zilliz(uri, token):
     """Initializes/Returns the memory collection."""
     connections.connect(uri=uri, token=token)
-    col_name = "ensemble_memory_v1"
+    col_name = "ensemble_memory_v2"
     if not utility.has_collection(col_name):
         fields = [
             FieldSchema(name="id", dtype=DataType.INT64, is_primary=True, auto_id=True),
-            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=768),
+            FieldSchema(name="vector", dtype=DataType.FLOAT_VECTOR, dim=3072),
             FieldSchema(name="text", dtype=DataType.VARCHAR, max_length=60000), 
             FieldSchema(name="session_id", dtype=DataType.VARCHAR, max_length=100),
             FieldSchema(name="role", dtype=DataType.VARCHAR, max_length=20)
